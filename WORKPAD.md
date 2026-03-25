@@ -1,7 +1,7 @@
 ## Opencode Workpad
 RIC-5
 ```text
-mac.lan:/Users/richfairhurst/code/symphony-workspaces/RIC-5@830838f
+mac.lan:/Users/richfairhurst/code/symphony-workspaces/RIC-5@8a8f715
 ```
 
 ### Plan
