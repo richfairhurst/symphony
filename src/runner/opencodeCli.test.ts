@@ -60,6 +60,8 @@ describe("opencode CLI runner", () => {
       "gpt-5",
       "--attach",
       "http://127.0.0.1:1234",
+      "--",
+      "do it",
     ]);
     expect(handle.pid).toBe(123);
   });

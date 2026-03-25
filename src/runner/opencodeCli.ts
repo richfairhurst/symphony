@@ -139,6 +139,9 @@ export class OpencodeCliRunner implements Runner {
     if (params.model !== undefined) argv.push("--model", params.model);
     if (params.attach !== undefined) argv.push("--attach", params.attach);
 
+    // Opencode CLI expects the user message as argv, not stdin.
+    argv.push("--", params.prompt);
+
     const spawnOpts: SpawnOpts = { cwd: params.workspacePath };
     if (this.env !== undefined) spawnOpts.env = this.env;
     const proc = this.spawnFn(argv0, argv, spawnOpts);
@@ -152,12 +155,7 @@ export class OpencodeCliRunner implements Runner {
       argv: [argv0, ...argv],
     });
 
-    try {
-      proc.stdin.write(params.prompt);
-      if (!params.prompt.endsWith("\n")) proc.stdin.write("\n");
-    } finally {
-      proc.stdin.end();
-    }
+    proc.stdin.end();
 
     const clearTimers: Array<() => void> = [];
     const setTimer = (ms: number, fn: () => void) => {

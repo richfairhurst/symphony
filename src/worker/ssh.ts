@@ -343,6 +343,9 @@ export class SshOpencodeRunner implements Runner {
     if (params.model !== undefined) argv.push("--model", params.model);
     if (params.attach !== undefined) argv.push("--attach", params.attach);
 
+    // Opencode CLI expects the user message as argv, not stdin.
+    argv.push("--", params.prompt);
+
     const remoteCmd = [
       `cd ${shellEscape(params.workspacePath)}`,
       "&&",
@@ -384,12 +387,7 @@ export class SshOpencodeRunner implements Runner {
       argv: ["ssh", params.host, "bash", "-lc", remoteCmd],
     });
 
-    try {
-      child.stdin.write(params.prompt);
-      if (!params.prompt.endsWith("\n")) child.stdin.write("\n");
-    } finally {
-      child.stdin.end();
-    }
+    child.stdin.end();
 
     const clearTimers: Array<() => void> = [];
     const setTimer = (ms: number, fn: () => void) => {
