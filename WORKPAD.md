@@ -1,7 +1,7 @@
 ## Opencode Workpad
 RIC-6
 ```text
-mac.lan:/Users/richfairhurst/code/symphony-workspaces/RIC-6@26eaa2f
+mac.lan:/Users/richfairhurst/code/symphony-workspaces/RIC-6@847667d
 ```
 
 ### Plan
@@ -19,9 +19,9 @@ mac.lan:/Users/richfairhurst/code/symphony-workspaces/RIC-6@26eaa2f
   - [x] 3.2 Run `bun test` + `bun run typecheck`
   - [x] 3.3 Validate mode selection + terminal cleanup behavior (end-to-end)
 - [ ] 4. Ship-ready hygiene
-  - [ ] 4.1 Commit untracked demo + config changes
-  - [ ] 4.2 Push branch
-  - [ ] 4.3 Open PR + ensure `symphony` label
+  - [x] 4.1 Commit untracked demo + config changes
+  - [x] 4.2 Push branch
+  - [x] 4.3 Open PR + ensure `symphony` label
 
 ### Acceptance Criteria
 
@@ -49,6 +49,7 @@ mac.lan:/Users/richfairhurst/code/symphony-workspaces/RIC-6@26eaa2f
 - 2026-03-25 21:18 — pull skill evidence: merge sources: origin/master; result: clean; HEAD `26eaa2f`.
 - 2026-03-25 21:18 — Workspace has uncommitted demo/config changes; converting to a second commit + PR.
 - 2026-03-25 21:21 — Re-validated with demo e2e: `bun test` + `bun run typecheck` green.
+- 2026-03-25 21:25 — Created branch `ric-6-visual-cli`; commit `847667d`; pushed; opened PR #2 (label: `symphony`).
 
 ### Confusions
 
