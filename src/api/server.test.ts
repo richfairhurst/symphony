@@ -95,6 +95,13 @@ describe("api server", () => {
     }
 
     {
+      const res = await fetch(`${base}/api/v1/ping`);
+      expect(res.status).toBe(200);
+      expect(res.headers.get("content-type") ?? "").toContain("application/json");
+      expect(await readJson(res)).toEqual({ ok: true });
+    }
+
+    {
       const res = await fetch(`${base}/api/v1/state`);
       expect(res.status).toBe(200);
       const body = await readJson(res);

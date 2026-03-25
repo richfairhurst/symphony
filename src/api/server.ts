@@ -59,6 +59,10 @@ export function startApiServer(opts: ApiServerOptions): ApiServerHandle {
     return json({ ok: true }, { status: 200 });
   });
 
+  r.add("GET", "/api/v1/ping", async () => {
+    return json({ ok: true }, { status: 200 });
+  });
+
   r.add("GET", "/api/v1/state", async () => {
     const nowMs = Date.now();
     const st = opts.orchestrator.getRuntimeState();
