@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "orchestrator": "bun src/index.ts",
+    "linear-graphql": "bun src/tools/linearGraphql.ts",
     "linear-ticket": "bun src/tools/linearTicket.ts",
+    "linear-workpad-sync": "bun src/tools/linearWorkpadSync.ts",
     "test": "bun test",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },

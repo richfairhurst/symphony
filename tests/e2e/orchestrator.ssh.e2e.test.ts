@@ -288,7 +288,11 @@ describe("phase 7 ssh worker e2e", () => {
     });
 
     await orch1.start();
-    await new Promise((r) => setTimeout(r, 0));
+    // Give the runner time to exit and the orchestrator time to persist the retry.
+    for (let i = 0; i < 50; i++) {
+      if (orch1.getRuntimeState().retryQueue.has("i1")) break;
+      await new Promise((r) => setTimeout(r, 0));
+    }
     await orch1.stop();
     watcher1.close();
 
