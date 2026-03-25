@@ -18,7 +18,7 @@ mac.lan:/Users/richfairhurst/code/symphony-workspaces/RIC-6@847667d
   - [x] 3.1 Unit test screen rendering for stable output
   - [x] 3.2 Run `bun test` + `bun run typecheck`
   - [x] 3.3 Validate mode selection + terminal cleanup behavior (end-to-end)
-- [ ] 4. Ship-ready hygiene
+- [x] 4. Ship-ready hygiene
   - [x] 4.1 Commit untracked demo + config changes
   - [x] 4.2 Push branch
   - [x] 4.3 Open PR + ensure `symphony` label
@@ -50,6 +50,7 @@ mac.lan:/Users/richfairhurst/code/symphony-workspaces/RIC-6@847667d
 - 2026-03-25 21:18 — Workspace has uncommitted demo/config changes; converting to a second commit + PR.
 - 2026-03-25 21:21 — Re-validated with demo e2e: `bun test` + `bun run typecheck` green.
 - 2026-03-25 21:25 — Created branch `ric-6-visual-cli`; commit `847667d`; pushed; opened PR #2 (label: `symphony`).
+- 2026-03-25 21:40 — Follow-up: fix stray `.gitignore` entry; re-run validation; ensure branch tracks `origin/ric-6-visual-cli`.
 
 ### Confusions
 
