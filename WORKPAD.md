@@ -1,7 +1,7 @@
 ## Opencode Workpad
 RIC-5
 ```text
-mac.lan:/Users/richfairhurst/code/symphony-workspaces/RIC-5@1851501
+mac.lan:/Users/richfairhurst/code/symphony-workspaces/RIC-5@830838f
 ```
 
 ### Plan
@@ -17,6 +17,7 @@ mac.lan:/Users/richfairhurst/code/symphony-workspaces/RIC-5@1851501
 - [x] 9. Create `## Opencode Workpad` Linear comment
 - [x] 10. Attach PR link to Linear issue
 - [x] 11. Run PR feedback sweep protocol
+- [ ] 12. Move Linear issue to `Done` after merge
 
 ### Acceptance Criteria
 
@@ -49,10 +50,14 @@ mac.lan:/Users/richfairhurst/code/symphony-workspaces/RIC-5@1851501
 - 2026-03-25 20:47 - committed+push: d9ee10d (chore: update workpad)
 - 2026-03-25 20:48 - PR feedback sweep: no PR comments/reviews/inline comments; status checks: none reported; PR #1 state=OPEN
 - 2026-03-25 20:32 - re-validated: `bun test` => PASS (58 pass, 0 fail) on HEAD=1851501; PR #1 feedback sweep => no comments/reviews/inline; checks => none reported
+- 2026-03-25 21:05 - retry attempt #2 kickoff: Linear state confirmed `In Progress`; PR #1 state=OPEN; label `symphony` present; no PR comments/reviews/inline comments; checks: none reported
+- 2026-03-25 21:06 - sync: `git fetch origin && git merge origin/master` => already up to date; HEAD=830838f
+- 2026-03-25 21:07 - validation: `bun test` => PASS (58 pass, 0 fail)
+- 2026-03-25 20:43 - retry attempt #3: PR #1 state=OPEN, mergeable=MERGEABLE; feedback sweep => no comments/reviews/inline; checks => none; `bun test` => PASS (58 pass, 0 fail)
 
 ### Confusions
 
-- 
+- Linear workflow for team `RIC` does not include `Human Review` / `Merging` / `Rework` states from the runbook; only `Backlog`, `Todo`, `In Progress`, `Done`.
 
 ### Validation
 
