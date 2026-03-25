@@ -54,6 +54,7 @@ mac.lan:/Users/richfairhurst/code/symphony-workspaces/RIC-5@830838f
 - 2026-03-25 21:06 - sync: `git fetch origin && git merge origin/master` => already up to date; HEAD=830838f
 - 2026-03-25 21:07 - validation: `bun test` => PASS (58 pass, 0 fail)
 - 2026-03-25 20:43 - retry attempt #3: PR #1 state=OPEN, mergeable=MERGEABLE; feedback sweep => no comments/reviews/inline; checks => none; `bun test` => PASS (58 pass, 0 fail)
+- 2026-03-25 20:45 - committed: 4d8d266 (chore: update workpad); push: `GIT_SSH_COMMAND="ssh -i ~/.ssh/id_rsa -o IdentitiesOnly=yes" git push` (default SSH key `~/.ssh/yubikey_ssh.pub` fails in unattended runs)
 
 ### Confusions
 
