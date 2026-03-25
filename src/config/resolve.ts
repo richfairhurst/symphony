@@ -223,6 +223,11 @@ export function resolveWorkflow(
   if (trackerApiKey !== undefined) tracker.apiKey = trackerApiKey;
   if (parsed.tracker?.project_slug !== undefined) tracker.projectSlug = parsed.tracker.project_slug;
 
+  // Demo mode runs with an in-process fake tracker and does not require user secrets.
+  if (tracker.kind?.toLowerCase() === "demo" && tracker.projectSlug === undefined) {
+    tracker.projectSlug = "demo";
+  }
+
   return {
     promptTemplate: prompt,
     config: {

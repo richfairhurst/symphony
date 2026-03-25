@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "orchestrator": "bun src/index.ts",
+    "linear-ticket": "bun src/tools/linearTicket.ts",
     "test": "bun test",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
