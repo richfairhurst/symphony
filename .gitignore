@@ -1,0 +1,28 @@
+# macOS
+.DS_Store
+
+# Node/Bun
+node_modules/
+bun.lockb
+
+# TypeScript build output (if you add any)
+dist/
+build/
+out/
+
+# Test/coverage
+coverage/
+
+# Logs
+*.log
+
+# Local state
+.symphony_state/
+
+# Secrets
+.env
+.env.*
+
+# Project-specific
+thoughts/
+WORKFLOW.md
