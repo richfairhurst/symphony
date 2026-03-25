@@ -11,6 +11,7 @@ import { startApiServer } from "../api/server";
 import { createJsonlFileSink, createLogger, makeLegacyLogger, type LogSink, type StructuredLogger } from "../obs/log";
 import { HybridRunner, HybridWorkspaceManager, SshOpencodeRunner, SshWorkspaceManager } from "../worker/ssh";
 import { createMemoryLogSink, createTeeSink, VisualCli } from "./visual";
+import { createDemoLinearClient, createDemoRunner, isDemoTracker } from "./demo";
 
 export type CliIo = {
   stdout?: (chunk: string) => void;
@@ -213,9 +214,12 @@ export async function runCli(argv: string[], io: CliIo = {}): Promise<number> {
     logger: legacyLogger,
   });
 
-  const linearClient = new LinearClient({ endpoint: cfg.tracker.endpoint, apiKey: cfg.tracker.apiKey ?? "" });
+  const useDemo = isDemoTracker(cfg.tracker.kind);
+  const linearClient = useDemo
+    ? createDemoLinearClient()
+    : new LinearClient({ endpoint: cfg.tracker.endpoint, apiKey: cfg.tracker.apiKey ?? "" });
 
-  const localRunner = new OpencodeCliRunner({ env: process.env });
+  const localRunner = useDemo ? createDemoRunner() : new OpencodeCliRunner({ env: process.env });
   const sshHosts = cfg.worker.sshHosts;
   const runner =
     sshHosts !== undefined && sshHosts.length > 0
