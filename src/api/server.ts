@@ -120,7 +120,7 @@ export function startApiServer(opts: ApiServerOptions): ApiServerHandle {
         retrying,
         opencode_totals: totals,
         codex_totals: totals,
-        rate_limits: null,
+        rate_limits: st.codexRateLimits ?? null,
       },
       { status: 200 },
     );

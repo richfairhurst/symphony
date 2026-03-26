@@ -15,6 +15,7 @@ export type RunningEntry = {
   attempt: number | null;
   host: string;
   handle: RunnerHandle;
+  pid?: number;
   startedAtMs: number;
   lastEventAtMs: number;
   lastEventType?: RunnerEvent["type"];
@@ -30,13 +31,34 @@ export type RunningEntry = {
     lastInterestingSummary?: string;
   };
   lastSessionId?: string;
+  lastEventSummary?: string;
   turnCount: number;
+  tokenInput?: number;
+  tokenOutput?: number;
+  tokenTotal?: number;
+  lastSeenTokenTotal?: number;
   stopPolicy: "keep" | "release";
   stopReason?: "terminal" | "non_active" | "shutdown";
   lastAbortReason?: RunnerAbortReason;
 };
 
 export type OrchestratorRuntimeState = {
+  // Meta (best effort; may be null when unknown).
+  orchestratorStartedAtMs: number | null;
+  lastTickAtMs: number | null;
+  pollIntervalMs: number | null;
+  nextTickDueAtMs: number | null;
+  projectSlug: string | null;
+  maxConcurrentAgents: number | null;
+
+  // Latest rate-limit payload observed from agent events.
+  codexRateLimits: Record<string, unknown> | null;
+
+  // Aggregate token usage observed from runner events.
+  tokenInputTotal: number | null;
+  tokenOutputTotal: number | null;
+  tokenTotal: number | null;
+
   running: Map<string, RunningEntry>;
   claimed: Set<string>;
   retryQueue: Map<string, RetryEntry>;
@@ -45,6 +67,16 @@ export type OrchestratorRuntimeState = {
 
 export function createEmptyState(): OrchestratorRuntimeState {
   return {
+    orchestratorStartedAtMs: null,
+    lastTickAtMs: null,
+    pollIntervalMs: null,
+    nextTickDueAtMs: null,
+    projectSlug: null,
+    maxConcurrentAgents: null,
+    codexRateLimits: null,
+    tokenInputTotal: null,
+    tokenOutputTotal: null,
+    tokenTotal: null,
     running: new Map(),
     claimed: new Set(),
     retryQueue: new Map(),

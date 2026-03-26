@@ -3,6 +3,14 @@ import { createEmptyState } from "../core/state";
 import type { RunnerHandle, RunnerWaitResult } from "../runner/types";
 import { renderVisualScreen, VisualCli } from "./visual";
 
+function stripAnsi(s: string): string {
+  return s.replace(/\x1b\[[0-9;]*m/g, "");
+}
+
+function visibleWidth(s: string): number {
+  return stripAnsi(s).length;
+}
+
 function makeHandle(): RunnerHandle {
   const wait: RunnerWaitResult = {
     pid: 1,
@@ -27,7 +35,7 @@ function makeHandle(): RunnerHandle {
 }
 
 describe("visual CLI", () => {
-  test("renders running + retrying + activity", () => {
+  test("renders status header + running + backoff", () => {
     const state = createEmptyState();
     const nowMs = 1_700_000_000_000;
 
@@ -70,31 +78,32 @@ describe("visual CLI", () => {
       error: "exit:1",
     });
 
-    const out = renderVisualScreen({
-      nowMs,
-      frame: 2,
-      state,
-      logs: [
-        {
-          ts: "2026-03-25T20:00:00.000Z",
-          level: "info",
-          event: "log",
-          message: "dispatch tick",
-          issue_id: null,
-          issue_identifier: null,
-          session_id: null,
-        },
-      ],
-      width: 100,
-      workflowPath: "/tmp/WORKFLOW.md",
-    });
+    const out = stripAnsi(
+      renderVisualScreen({
+        nowMs,
+        frame: 2,
+        state,
+        logs: [
+          {
+            ts: "2026-03-25T20:00:00.000Z",
+            level: "info",
+            event: "log",
+            message: "dispatch tick",
+            issue_id: null,
+            issue_identifier: null,
+            session_id: null,
+          },
+        ],
+        width: 100,
+        workflowPath: "/tmp/WORKFLOW.md",
+      }),
+    );
 
-    expect(out).toContain("RUNNING");
+    expect(out).toContain("SYMPHONY STATUS");
+    expect(out).toContain("RUNNING AGENTS");
     expect(out).toContain("RIC-6");
-    expect(out).toContain("RETRYING");
+    expect(out).toContain("BACKOFF QUEUE");
     expect(out).toContain("RIC-7");
-    expect(out).toContain("ACTIVITY");
-    expect(out).toContain("dispatch tick");
   });
 
   test("restores cursor on stop", () => {
@@ -117,5 +126,52 @@ describe("visual CLI", () => {
 
     expect(out).toContain("\x1b[?25l");
     expect(out).toContain("\x1b[?25h");
+  });
+
+  test("never exceeds the configured width", () => {
+    const state = createEmptyState();
+    const nowMs = 1_700_000_000_000;
+
+    state.running.set("1", {
+      issue: {
+        id: "1",
+        identifier: "RIC-123",
+        title: "Long title that should be truncated",
+        description: null,
+        priority: null,
+        state: "In Progress",
+        url: null,
+        labels: [],
+        blocked_by: [],
+        created_at: null,
+        updated_at: null,
+      },
+      attempt: 1,
+      host: "local",
+      handle: makeHandle(),
+      pid: 12345,
+      startedAtMs: nowMs - 65_000,
+      lastEventAtMs: nowMs - 2_000,
+      turnCount: 999,
+      lastSessionId: "sess_abcdefghijklmnopqrstuvwxyz0123456789",
+      lastEventSummary: "a very long event summary that should be truncated to fit the terminal width",
+      tokenTotal: 123456,
+      stopPolicy: "keep",
+    });
+
+    const width = 60;
+    const out = renderVisualScreen({
+      nowMs,
+      frame: 2,
+      state,
+      logs: [],
+      width,
+      workflowPath: "/a/really/long/path/to/a/workflow/file/that/should/not/wrap/WORKFLOW.md",
+    });
+
+    for (const line of out.split("\n")) {
+      if (line === "") continue;
+      expect(visibleWidth(line)).toBeLessThanOrEqual(width);
+    }
   });
 });

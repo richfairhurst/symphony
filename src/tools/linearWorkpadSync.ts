@@ -126,6 +126,15 @@ type IssueLookup = {
   comments: Array<{ id: string; body: string; updatedAt?: string }>;
 };
 
+function parseTeamAndNumber(identifier: string): { teamKey: string; number: number } | null {
+  const m = /^([A-Za-z0-9]+)-(\d+)$/.exec(identifier.trim());
+  if (!m) return null;
+  const teamKey = m[1]!.toUpperCase();
+  const number = Number.parseInt(m[2]!, 10);
+  if (!Number.isFinite(number)) return null;
+  return { teamKey, number };
+}
+
 function parseIssueLookup(payload: GraphqlEnvelope): IssueLookup | null {
   const data = payload.data;
   if (!isRecord(data)) return null;
@@ -179,8 +188,8 @@ async function main(): Promise<number> {
   workpad = ensureMarker(workpad, parsed.marker, parsed.identifier);
 
   const issueQuery = /* GraphQL */ `
-    query IssueByIdentifierWithComments($identifier: String!) {
-      issues(filter: { identifier: { eq: $identifier } }, first: 1) {
+    query IssueByTeamAndNumberWithComments($teamKey: String!, $number: Float!) {
+      issues(filter: { team: { key: { eq: $teamKey } }, number: { eq: $number } }, first: 1) {
         nodes {
           id
           identifier
@@ -196,7 +205,18 @@ async function main(): Promise<number> {
     }
   `;
 
-  const issueEnv = await graphql({ endpoint, apiKey, query: issueQuery, variables: { identifier: parsed.identifier } });
+  const keyAndNumber = parseTeamAndNumber(parsed.identifier);
+  if (keyAndNumber === null) {
+    console.error(`Unrecognized issue identifier format: ${parsed.identifier}`);
+    return 2;
+  }
+
+  const issueEnv = await graphql({
+    endpoint,
+    apiKey,
+    query: issueQuery,
+    variables: { teamKey: keyAndNumber.teamKey, number: keyAndNumber.number },
+  });
   const issue = parseIssueLookup(issueEnv);
   if (issue === null) {
     console.error(`Issue not found: ${parsed.identifier}`);
