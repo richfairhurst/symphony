@@ -102,6 +102,13 @@ export function startApiServer(opts: ApiServerOptions): ApiServerHandle {
         return acc + Math.max((nowMs - started) / 1000, 0);
       }, 0) ?? 0;
 
+    const totals = {
+      input_tokens: 0,
+      output_tokens: 0,
+      total_tokens: 0,
+      seconds_running: secondsRunning,
+    };
+
     return json(
       {
         generated_at: new Date(nowMs).toISOString(),
@@ -111,12 +118,8 @@ export function startApiServer(opts: ApiServerOptions): ApiServerHandle {
         },
         running,
         retrying,
-        codex_totals: {
-          input_tokens: 0,
-          output_tokens: 0,
-          total_tokens: 0,
-          seconds_running: secondsRunning,
-        },
+        opencode_totals: totals,
+        codex_totals: totals,
         rate_limits: null,
       },
       { status: 200 },
