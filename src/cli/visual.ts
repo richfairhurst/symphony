@@ -3,6 +3,18 @@ import type { LogEntry, LogSink } from "../obs/log";
 
 type WriteFn = (chunk: string) => void;
 
+const ANSI = {
+  reset: "\x1b[0m",
+  dim: "\x1b[2m",
+  bold: "\x1b[1m",
+  green: "\x1b[32m",
+  yellow: "\x1b[33m",
+  red: "\x1b[31m",
+  cyan: "\x1b[36m",
+} as const;
+
+const ANSI_PATTERN = /\x1b\[[0-9;]*m/g;
+
 function pad2(n: number): string {
   return n < 10 ? `0${n}` : String(n);
 }
@@ -23,6 +35,59 @@ function formatDuration(ms: number): string {
     return `${h}h${pad2(mm)}m`;
   }
   return `${m}:${pad2(r)}`;
+}
+
+function visibleLength(s: string): number {
+  return s.replace(ANSI_PATTERN, "").length;
+}
+
+function takeVisiblePrefix(s: string, maxVisible: number): string {
+  if (maxVisible <= 0) return "";
+  let out = "";
+  let visible = 0;
+  for (let i = 0; i < s.length && visible < maxVisible; ) {
+    if (s[i] === "\x1b") {
+      const m = /^\x1b\[[0-9;]*m/.exec(s.slice(i));
+      if (m) {
+        out += m[0];
+        i += m[0].length;
+        continue;
+      }
+    }
+    out += s[i]!;
+    i++;
+    visible++;
+  }
+  return out;
+}
+
+function truncateEndAnsi(s: string, maxVisible: number): string {
+  if (maxVisible <= 0) return "";
+  const vis = visibleLength(s);
+  if (vis <= maxVisible) return s;
+  if (maxVisible <= 3) return takeVisiblePrefix(s, maxVisible) + ANSI.reset;
+  return takeVisiblePrefix(s, maxVisible - 3) + "..." + ANSI.reset;
+}
+
+function padEndAnsi(s: string, widthVisible: number): string {
+  const vis = visibleLength(s);
+  if (vis >= widthVisible) return truncateEndAnsi(s, widthVisible);
+  return s + " ".repeat(widthVisible - vis);
+}
+
+function padStartAnsi(s: string, widthVisible: number): string {
+  const vis = visibleLength(s);
+  if (vis >= widthVisible) return truncateEndAnsi(s, widthVisible);
+  return " ".repeat(widthVisible - vis) + s;
+}
+
+function centerAnsi(s: string, widthVisible: number): string {
+  const vis = visibleLength(s);
+  if (vis >= widthVisible) return truncateEndAnsi(s, widthVisible);
+  const pad = widthVisible - vis;
+  const left = Math.floor(pad / 2);
+  const right = pad - left;
+  return " ".repeat(left) + s + " ".repeat(right);
 }
 
 function truncateEnd(s: string, max: number): string {
@@ -46,6 +111,184 @@ function compareRunning(a: RunningEntry, b: RunningEntry): number {
   return a.issue.identifier.localeCompare(b.issue.identifier);
 }
 
+function dim(s: string): string {
+  return `${ANSI.dim}${s}${ANSI.reset}`;
+}
+
+function bold(s: string): string {
+  return `${ANSI.bold}${s}${ANSI.reset}`;
+}
+
+function colorStage(stage: string): string {
+  const normalized = stage.trim().toLowerCase();
+  if (normalized === "todo") return `${ANSI.yellow}${stage}${ANSI.reset}`;
+  if (normalized === "in progress") return `${ANSI.green}${stage}${ANSI.reset}`;
+  if (normalized === "rework") return `${ANSI.red}${stage}${ANSI.reset}`;
+  if (normalized === "done") return `${ANSI.dim}${stage}${ANSI.reset}`;
+  return stage;
+}
+
+function boxRule(width: number): string {
+  return `+${"-".repeat(Math.max(0, width - 2))}+`;
+}
+
+function boxLine(width: number, content: string): string {
+  const inner = Math.max(0, width - 4);
+  return `| ${padEndAnsi(content, inner)} |`;
+}
+
+function formatMaybeNumber(n: number | null | undefined): string {
+  if (n === null || n === undefined) return "n/a";
+  return Number.isFinite(n) ? String(Math.floor(n)) : "n/a";
+}
+
+function readRateNumber(obj: Record<string, unknown> | null, keys: string[]): number | undefined {
+  if (!obj) return undefined;
+
+  for (const k of keys) {
+    const v = obj[k];
+    if (typeof v === "number" && Number.isFinite(v)) return v;
+  }
+
+  const requests = obj.requests;
+  if (requests && typeof requests === "object" && !Array.isArray(requests)) {
+    const r = requests as Record<string, unknown>;
+    for (const k of keys) {
+      const v = r[k];
+      if (typeof v === "number" && Number.isFinite(v)) return v;
+    }
+  }
+
+  const tokens = obj.tokens;
+  if (tokens && typeof tokens === "object" && !Array.isArray(tokens)) {
+    const t = tokens as Record<string, unknown>;
+    for (const k of keys) {
+      const v = t[k];
+      if (typeof v === "number" && Number.isFinite(v)) return v;
+    }
+  }
+
+  return undefined;
+}
+
+function formatRateLimits(rateLimits: Record<string, unknown> | null): string {
+  const reqRemaining = readRateNumber(rateLimits, [
+    "requests_remaining",
+    "requestsRemaining",
+    "remaining_requests",
+    "remainingRequests",
+    "request_remaining",
+    "requestRemaining",
+  ]);
+  const reqLimit = readRateNumber(rateLimits, [
+    "requests_limit",
+    "requestsLimit",
+    "limit_requests",
+    "limitRequests",
+    "request_limit",
+    "requestLimit",
+  ]);
+
+  const tokRemaining = readRateNumber(rateLimits, [
+    "tokens_remaining",
+    "tokensRemaining",
+    "remaining_tokens",
+    "remainingTokens",
+    "token_remaining",
+    "tokenRemaining",
+  ]);
+  const tokLimit = readRateNumber(rateLimits, [
+    "tokens_limit",
+    "tokensLimit",
+    "limit_tokens",
+    "limitTokens",
+    "token_limit",
+    "tokenLimit",
+  ]);
+
+  const req = `${formatMaybeNumber(reqRemaining)}/${formatMaybeNumber(reqLimit)}`;
+  const tok = `${formatMaybeNumber(tokRemaining)}/${formatMaybeNumber(tokLimit)}`;
+  return `${dim("req")} ${bold(req)} ${dim("tok")} ${bold(tok)}`;
+}
+
+function formatPid(pid: number | undefined): string {
+  if (pid === undefined) return "-";
+  return Number.isFinite(pid) ? String(pid) : "-";
+}
+
+type TableCol = {
+  key: string;
+  title: string;
+  min: number;
+  ideal: number;
+  dropPriority: number;
+  align: "left" | "right";
+};
+
+function chooseColumns(total: number): TableCol[] {
+  const all: TableCol[] = [
+    { key: "id", title: "ID", min: 6, ideal: 8, dropPriority: 0, align: "left" },
+    { key: "stage", title: "Stage", min: 4, ideal: 12, dropPriority: 2, align: "left" },
+    { key: "pid", title: "PID", min: 3, ideal: 5, dropPriority: 5, align: "right" },
+    { key: "ageTurn", title: "Age/Turn", min: 7, ideal: 9, dropPriority: 1, align: "left" },
+    { key: "tokens", title: "Tokens", min: 4, ideal: 7, dropPriority: 4, align: "right" },
+    { key: "session", title: "Session", min: 6, ideal: 10, dropPriority: 6, align: "left" },
+    { key: "event", title: "Event", min: 10, ideal: 24, dropPriority: 3, align: "left" },
+  ];
+
+  const minWithSpaces = (cols: TableCol[]) => cols.reduce((sum, c) => sum + c.min, 0) + Math.max(0, cols.length - 1);
+
+  let cols = all.slice();
+  while (cols.length > 3 && minWithSpaces(cols) > total) {
+    const drop = cols.reduce((best, c) => (c.dropPriority > best.dropPriority ? c : best), cols[0]!);
+    cols = cols.filter((c) => c.key !== drop.key);
+  }
+  return cols;
+}
+
+function allocateWidths(total: number, cols: TableCol[]): Array<TableCol & { width: number }> {
+  const widths = cols.map((c) => ({ ...c, width: c.ideal }));
+  const sumWidths = () => widths.reduce((s, c) => s + c.width, 0) + Math.max(0, widths.length - 1);
+
+  // Shrink to fit.
+  let overflow = sumWidths() - total;
+  const shrinkOrder = ["event", "session", "stage", "tokens", "ageTurn", "pid", "id"];
+  for (const key of shrinkOrder) {
+    if (overflow <= 0) break;
+    const c = widths.find((w) => w.key === key);
+    if (!c) continue;
+    const can = c.width - c.min;
+    if (can <= 0) continue;
+    const take = Math.min(can, overflow);
+    c.width -= take;
+    overflow -= take;
+  }
+
+  // If still overflow (very narrow), clamp everything proportionally down to 1.
+  if (overflow > 0) {
+    for (const c of widths) c.width = Math.max(1, Math.min(c.width, c.min));
+  }
+
+  // Grow remaining space into the event column.
+  let remaining = total - sumWidths();
+  if (remaining > 0) {
+    const ev = widths.find((w) => w.key === "event");
+    if (ev) ev.width += remaining;
+  }
+  return widths;
+}
+
+function renderRow(cols: Array<TableCol & { width: number }>, values: Record<string, string>): string {
+  const parts: string[] = [];
+  for (const c of cols) {
+    const raw = values[c.key] ?? "";
+    const v = truncateEndAnsi(raw, c.width);
+    if (c.align === "right") parts.push(padStartAnsi(v, c.width));
+    else parts.push(padEndAnsi(v, c.width));
+  }
+  return parts.join(" ");
+}
+
 export function renderVisualScreen(opts: {
   nowMs: number;
   frame: number;
@@ -54,71 +297,121 @@ export function renderVisualScreen(opts: {
   width: number;
   workflowPath: string;
 }): string {
-  const width = Math.max(60, opts.width);
+  const width = Math.max(20, opts.width);
   const nowMs = opts.nowMs;
 
   const running = Array.from(opts.state.running.values()).sort(compareRunning);
   const retrying = Array.from(opts.state.retryQueue.values()).sort(compareRetry);
 
-  const headerLeft = `Symphony Orchestrator  ${spinner(opts.frame)}  ${running.length} running, ${retrying.length} retrying`;
-  const headerRight = truncateEnd(opts.workflowPath, Math.max(0, width - headerLeft.length - 3));
-  const header = headerRight.length > 0 ? `${headerLeft}  ${headerRight}` : headerLeft;
-
   const lines: string[] = [];
-  lines.push(truncateEnd(header, width));
-  lines.push("".padEnd(Math.min(width, header.length), "-"));
-  lines.push("");
 
-  lines.push("RUNNING");
+  lines.push(boxRule(width));
+  lines.push(boxLine(width, centerAnsi(bold("SYMPHONY STATUS"), Math.max(0, width - 4))));
+  lines.push(boxRule(width));
+
+  const maxAgents = opts.state.maxConcurrentAgents;
+  const maxAgentsText = maxAgents === null ? "n/a" : String(maxAgents);
+  const startedAt = opts.state.orchestratorStartedAtMs;
+  const runtime = startedAt === null ? "n/a" : formatDuration(nowMs - startedAt);
+  const nextTick = opts.state.nextTickDueAtMs;
+  const poll = opts.state.pollIntervalMs;
+  const refreshIn = nextTick === null ? "n/a" : formatDuration(nextTick - nowMs);
+  const cadence = poll === null ? "n/a" : `${Math.floor(poll / 1000)}s`;
+
+  const tokenIn = formatMaybeNumber(opts.state.tokenInputTotal);
+  const tokenOut = formatMaybeNumber(opts.state.tokenOutputTotal);
+  const tokenTotal = formatMaybeNumber(opts.state.tokenTotal);
+  const project = opts.state.projectSlug ?? "n/a";
+
+  lines.push(
+    boxLine(
+      width,
+      [
+        `${dim("Agents")}: ${bold(`${running.length}/${maxAgentsText}`)}`,
+        `${dim("Claimed")}: ${String(opts.state.claimed.size)}`,
+        `${dim("Runtime")}: ${bold(runtime)}`,
+        `${dim("Refresh")}: ${bold(refreshIn)} ${dim(`(${cadence})`)}`,
+      ].join("  "),
+    ),
+  );
+  lines.push(
+    boxLine(
+      width,
+      [
+        `${dim("Tokens")}: ${dim("in")} ${bold(tokenIn)} ${dim("out")} ${bold(tokenOut)} ${dim("total")} ${bold(tokenTotal)}`,
+        `${dim("Rate limits")}: ${formatRateLimits(opts.state.codexRateLimits)}`,
+      ].join("  "),
+    ),
+  );
+  lines.push(
+    boxLine(
+      width,
+      [
+        `${dim("Project")}: ${bold(project)}`,
+        `${dim("Workflow")}: ${truncateEnd(opts.workflowPath, 64)}`,
+      ].join("  "),
+    ),
+  );
+
+  lines.push(boxRule(width));
+  lines.push(boxLine(width, bold("RUNNING AGENTS")));
+
+  const tableInner = Math.max(0, width - 4);
+  const cols = allocateWidths(tableInner, chooseColumns(tableInner));
+
+  lines.push(boxLine(width, renderRow(cols, Object.fromEntries(cols.map((c) => [c.key, c.title])))));
+  lines.push(boxLine(width, "".padEnd(Math.min(tableInner, cols.reduce((s, c) => s + c.width, 0) + Math.max(0, cols.length - 1)), "-")));
+
   if (running.length === 0) {
-    lines.push("  (none)");
+    lines.push(boxLine(width, dim("No running agents")));
   } else {
-    for (const r of running) {
+    const maxRows = 12;
+    for (const r of running.slice(0, maxRows)) {
       const elapsed = formatDuration(nowMs - r.startedAtMs);
-      const idle = formatDuration(nowMs - r.lastEventAtMs);
-      const attempt = r.attempt === null ? "-" : String(r.attempt);
-      const base = `${r.issue.identifier}  a=${attempt}  turns=${r.turnCount}  host=${r.host}  up=${elapsed}  idle=${idle}`;
-      const title = r.issue.title ? `  ${r.issue.title}` : "";
-      lines.push(`  ${truncateEnd(base + title, width - 2)}`);
+      const ageTurn = `${elapsed}/${r.turnCount}`;
+      const tokens = r.tokenTotal !== undefined ? String(r.tokenTotal) : "n/a";
+      const session = r.lastSessionId ?? "-";
+      const event = r.lastEventSummary ?? "-";
+      const stage = colorStage(r.issue.state);
+
+      const row = renderRow(cols, {
+        id: r.issue.identifier,
+        stage,
+        pid: formatPid(r.pid),
+        ageTurn,
+        tokens,
+        session,
+        event,
+      });
+      lines.push(boxLine(width, row));
+    }
+    if (running.length > maxRows) {
+      lines.push(boxLine(width, dim(`(+${running.length - maxRows} more)`)));
     }
   }
-  lines.push("");
 
-  lines.push("RETRYING");
+  lines.push(boxRule(width));
+  lines.push(boxLine(width, bold("BACKOFF QUEUE")));
   if (retrying.length === 0) {
-    lines.push("  (none)");
+    lines.push(boxLine(width, dim("No queued retries")));
   } else {
-    for (const r of retrying.slice(0, 10)) {
+    const maxRows = 8;
+    for (const r of retrying.slice(0, maxRows)) {
       const dueIn = formatDuration(r.dueAtMs - nowMs);
-      const err = r.error ? `  err=${r.error}` : "";
-      const base = `${r.identifier}  a=${r.attempt}  due_in=${dueIn}  kind=${r.kind}`;
-      lines.push(`  ${truncateEnd(base + err, width - 2)}`);
+      const err = r.error ? `  ${dim("err")}=${truncateEnd(r.error, 36)}` : "";
+      const base = `${bold(r.identifier)}  ${dim("attempt")}=${r.attempt}  ${dim("due in")}=${bold(dueIn)}  ${dim("kind")}=${r.kind}`;
+      lines.push(boxLine(width, base + err));
     }
-    if (retrying.length > 10) {
-      lines.push(`  (+${retrying.length - 10} more)`);
-    }
-  }
-  lines.push("");
-
-  lines.push("ACTIVITY");
-  const activity = opts.logs
-    .filter((e) => e.message !== undefined || e.event === "log")
-    .slice(-8);
-  if (activity.length === 0) {
-    lines.push("  (none)");
-  } else {
-    for (const e of activity) {
-      const t = formatClock(e.ts);
-      const msg = (e.message ?? e.event) + (e.error ? ` (${e.error.message})` : "");
-      const base = `${t} ${e.level} ${msg}`;
-      lines.push(`  ${truncateEnd(base, width - 2)}`);
+    if (retrying.length > maxRows) {
+      lines.push(boxLine(width, dim(`(+${retrying.length - maxRows} more)`)));
     }
   }
 
-  lines.push("");
-  lines.push("Press Ctrl+C to stop.");
+  lines.push(boxRule(width));
+  lines.push(boxLine(width, dim("Press Ctrl+C to stop.")));
+  lines.push(boxRule(width));
 
-  return lines.map((l) => truncateEnd(l, width)).join("\n") + "\n";
+  return lines.map((l) => truncateEndAnsi(l, width)).join("\n") + "\n";
 }
 
 export function createMemoryLogSink(opts: { limit: number }): { sink: LogSink; get: () => LogEntry[] } {

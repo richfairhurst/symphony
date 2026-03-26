@@ -252,7 +252,7 @@ export async function runCli(argv: string[], io: CliIo = {}): Promise<number> {
         stdout,
         state: () => orch.getRuntimeState(),
         logs: memLogs.get,
-        width: () => columns,
+        width: () => io.columns ?? process.stdout.columns ?? columns,
         workflowPath,
       });
       visual.start();

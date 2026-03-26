@@ -76,7 +76,14 @@ export class Orchestrator {
     const snap = this.workflowWatcher.getSnapshot();
     validateStartupConfig(snap.resolved.config);
 
+    if (this.state.orchestratorStartedAtMs === null) {
+      this.state.orchestratorStartedAtMs = this.clock.nowMs();
+    }
+
     const cfg = snap.resolved.config;
+    this.state.projectSlug = cfg.tracker.projectSlug ?? null;
+    this.state.maxConcurrentAgents = cfg.agent.maxConcurrentAgents ?? null;
+    this.state.pollIntervalMs = cfg.polling.intervalMs ?? null;
     await cleanupTerminalWorkspaces({
       linearClient: this.linearClient,
       projectSlug: cfg.tracker.projectSlug!,
@@ -114,6 +121,10 @@ export class Orchestrator {
     if (this.stopped) return;
     const intervalMs = this.workflowWatcher.getSnapshot().resolved.config.polling.intervalMs;
     if (this.pollTimer) this.clock.clearTimeout(this.pollTimer);
+
+    const nowMs = this.clock.nowMs();
+    this.state.pollIntervalMs = intervalMs;
+    this.state.nextTickDueAtMs = nowMs + intervalMs;
     this.pollTimer = this.clock.setTimeout(() => {
       void this.tick().finally(() => this.scheduleNextTick());
     }, intervalMs);
@@ -197,6 +208,7 @@ export class Orchestrator {
 
   private async tickOnce(): Promise<void> {
     const nowMs = this.clock.nowMs();
+    this.state.lastTickAtMs = nowMs;
 
     // Clear any refresh request that prompted this tick (best effort coalescing).
     if (this.refreshPending) {
@@ -205,6 +217,10 @@ export class Orchestrator {
 
     const snap = this.workflowWatcher.getSnapshot();
     const cfg = snap.resolved.config;
+
+    this.state.projectSlug = cfg.tracker.projectSlug ?? null;
+    this.state.maxConcurrentAgents = cfg.agent.maxConcurrentAgents ?? null;
+    this.state.pollIntervalMs = cfg.polling.intervalMs ?? null;
 
     await reconcileRunning({
       nowMs,
@@ -397,6 +413,7 @@ export class Orchestrator {
       attempt,
       host,
       handle,
+      pid: handle.pid,
       startedAtMs,
       lastEventAtMs: startedAtMs,
       turnCount: 1,
@@ -412,8 +429,34 @@ export class Orchestrator {
     try {
       for await (const ev of entry.handle.events) {
         entry.lastEventAtMs = ev.ts;
+        if (ev.type === "process_started") {
+          entry.pid = ev.pid;
+          entry.lastEventSummary = `started pid=${ev.pid}`;
+        }
         if (ev.type === "stdout_json" && ev.sessionId !== undefined) {
           entry.lastSessionId = ev.sessionId;
+        }
+        if (ev.type === "stdout_json") {
+          const extracted = extractOpencodeStats(ev.value);
+          if (extracted.turnCount !== undefined && extracted.turnCount > entry.turnCount) {
+            entry.turnCount = extracted.turnCount;
+          }
+          if (extracted.summary !== undefined) {
+            entry.lastEventSummary = extracted.summary;
+          }
+
+          if (extracted.rateLimits !== null) {
+            this.state.codexRateLimits = extracted.rateLimits;
+          }
+
+          if (extracted.tokensDelta !== null) {
+            applyTokenDelta(this.state, entry, extracted.tokensDelta);
+          } else if (extracted.tokensTotalAbsolute !== null) {
+            applyTokenAbsoluteTotal(this.state, entry, extracted.tokensTotalAbsolute);
+          }
+        }
+        if (ev.type === "stderr") {
+          entry.lastEventSummary = `stderr: ${ev.line}`;
         }
         if (ev.type === "process_exited" && ev.abortReason !== undefined) {
           entry.lastAbortReason = ev.abortReason;
@@ -478,4 +521,157 @@ export class Orchestrator {
       await this.persist.writeRetry({ active: true, ...r });
     }
   }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function readNumber(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+function readString(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() !== "" ? value : undefined;
+}
+
+type TokenDelta = { input?: number; output?: number; total?: number };
+
+function applyTokenDelta(state: OrchestratorRuntimeState, entry: RunningEntry, delta: TokenDelta): void {
+  if (delta.input !== undefined) {
+    entry.tokenInput = (entry.tokenInput ?? 0) + delta.input;
+    state.tokenInputTotal = (state.tokenInputTotal ?? 0) + delta.input;
+  }
+  if (delta.output !== undefined) {
+    entry.tokenOutput = (entry.tokenOutput ?? 0) + delta.output;
+    state.tokenOutputTotal = (state.tokenOutputTotal ?? 0) + delta.output;
+  }
+
+  const computedTotal =
+    delta.total !== undefined ? delta.total : (delta.input !== undefined && delta.output !== undefined ? delta.input + delta.output : undefined);
+  if (computedTotal !== undefined) {
+    entry.tokenTotal = (entry.tokenTotal ?? 0) + computedTotal;
+    state.tokenTotal = (state.tokenTotal ?? 0) + computedTotal;
+  }
+}
+
+function applyTokenAbsoluteTotal(state: OrchestratorRuntimeState, entry: RunningEntry, total: number): void {
+  const prev = entry.lastSeenTokenTotal;
+  entry.lastSeenTokenTotal = total;
+  if (prev === undefined) {
+    entry.tokenTotal = (entry.tokenTotal ?? 0) + total;
+    state.tokenTotal = (state.tokenTotal ?? 0) + total;
+    return;
+  }
+  const delta = total - prev;
+  if (!Number.isFinite(delta) || delta <= 0) return;
+  entry.tokenTotal = (entry.tokenTotal ?? 0) + delta;
+  state.tokenTotal = (state.tokenTotal ?? 0) + delta;
+}
+
+function extractUsageDelta(obj: Record<string, unknown>): TokenDelta | null {
+  const usage = obj.usage;
+  if (isRecord(usage)) {
+    const prompt = readNumber(usage.prompt_tokens ?? usage.promptTokens ?? usage.input_tokens ?? usage.inputTokens);
+    const completion = readNumber(usage.completion_tokens ?? usage.completionTokens ?? usage.output_tokens ?? usage.outputTokens);
+    const total = readNumber(usage.total_tokens ?? usage.totalTokens ?? usage.tokens ?? usage.tokenTotal);
+
+    if (prompt !== undefined || completion !== undefined || total !== undefined) {
+      return {
+        ...(prompt !== undefined ? { input: prompt } : {}),
+        ...(completion !== undefined ? { output: completion } : {}),
+        ...(total !== undefined ? { total } : {}),
+      };
+    }
+  }
+
+  const input = readNumber(obj.input_tokens ?? obj.inputTokens ?? obj.prompt_tokens ?? obj.promptTokens);
+  const output = readNumber(obj.output_tokens ?? obj.outputTokens ?? obj.completion_tokens ?? obj.completionTokens);
+  const total = readNumber(obj.total_tokens ?? obj.totalTokens);
+  if (input !== undefined || output !== undefined || total !== undefined) {
+    return {
+      ...(input !== undefined ? { input } : {}),
+      ...(output !== undefined ? { output } : {}),
+      ...(total !== undefined ? { total } : {}),
+    };
+  }
+  return null;
+}
+
+function extractAbsoluteTotal(obj: Record<string, unknown>): number | null {
+  const total = readNumber(
+    obj.token_total ??
+      obj.tokenTotal ??
+      obj.tokens_total ??
+      obj.tokensTotal ??
+      obj.totalTokens ??
+      obj.total_tokens,
+  );
+  return total !== undefined ? total : null;
+}
+
+function extractTurnCount(obj: Record<string, unknown>): number | undefined {
+  const turn = readNumber(obj.turn ?? obj.turnCount ?? obj.turn_count);
+  if (turn !== undefined) return Math.max(1, Math.floor(turn));
+  const step = readNumber(obj.step ?? obj.stepIndex ?? obj.step_index);
+  if (step !== undefined) return Math.max(1, Math.floor(step));
+  return undefined;
+}
+
+function summarizeEvent(obj: Record<string, unknown>): string | undefined {
+  const message = readString(obj.message);
+  const event = readString(obj.event);
+  const type = readString(obj.type);
+  const kind = readString(obj.kind);
+
+  const base = message ?? event ?? type ?? kind;
+  if (!base) return undefined;
+
+  const err = obj.error;
+  if (readString(err) !== undefined) return `${base} (${String(err)})`;
+  if (isRecord(err)) {
+    const em = readString(err.message);
+    if (em) return `${base} (${em})`;
+  }
+  return base;
+}
+
+function extractRateLimitsPayload(obj: Record<string, unknown>): Record<string, unknown> | null {
+  const direct = obj.rate_limits ?? obj.rateLimits ?? obj.codex_rate_limits ?? obj.codexRateLimits;
+  if (isRecord(direct)) return direct;
+
+  // Some payloads nest rate limits under a meta/info object.
+  const meta = obj.meta ?? obj.info;
+  if (isRecord(meta)) {
+    const nested = meta.rate_limits ?? meta.rateLimits;
+    if (isRecord(nested)) return nested;
+  }
+
+  return null;
+}
+
+function extractOpencodeStats(value: unknown): {
+  summary?: string;
+  turnCount?: number;
+  tokensDelta: TokenDelta | null;
+  tokensTotalAbsolute: number | null;
+  rateLimits: Record<string, unknown> | null;
+} {
+  if (!isRecord(value)) {
+    return { tokensDelta: null, tokensTotalAbsolute: null, rateLimits: null };
+  }
+
+  const turnCount = extractTurnCount(value);
+  const tokensDelta = extractUsageDelta(value);
+  const tokensTotalAbsolute = extractAbsoluteTotal(value);
+  const summary = summarizeEvent(value);
+  const rateLimits = extractRateLimitsPayload(value);
+
+  return {
+    ...(summary !== undefined ? { summary } : {}),
+    ...(turnCount !== undefined ? { turnCount } : {}),
+    tokensDelta,
+    tokensTotalAbsolute,
+    rateLimits,
+  };
 }

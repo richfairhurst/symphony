@@ -61,8 +61,9 @@ describe("visual CLI (demo tracker)", () => {
 
       expect(res.code).toBe(0);
       expect(res.stdout).toContain("\x1b[?25l");
-      expect(res.stdout).toContain("RUNNING");
-      expect(res.stdout).toContain("RETRYING");
+      expect(res.stdout).toContain("SYMPHONY STATUS");
+      expect(res.stdout).toContain("RUNNING AGENTS");
+      expect(res.stdout).toContain("BACKOFF QUEUE");
       expect(res.stdout).toContain("\x1b[?25h");
     },
     15000,
