@@ -103,8 +103,55 @@ describe("api server", () => {
       expect(Array.isArray(body.running)).toBe(true);
       expect(Array.isArray(body.retrying)).toBe(true);
       expect(body.opencode_totals).toHaveProperty("seconds_running");
+      expect(body.opencode_totals.input_tokens).toBe(null);
+      expect(body.opencode_totals.output_tokens).toBe(null);
+      expect(body.opencode_totals.total_tokens).toBe(null);
       expect(body.codex_totals).toHaveProperty("seconds_running");
       expect(body.opencode_totals).toEqual(body.codex_totals);
+    }
+
+    {
+      const nowMs = Date.now();
+      const state = orch.getRuntimeState();
+      state.tokenInputTotal = 10;
+      state.tokenOutputTotal = 5;
+      state.tokenTotal = 15;
+      state.running.set("i2", {
+        issue: { id: "i2", identifier: "B-1", title: "B-1", description: null, priority: null, state: "Todo", url: null, labels: [], blocked_by: [], created_at: null, updated_at: null },
+        attempt: null,
+        host: "local",
+        handle: new FakeRunner([{ kind: "hang" }]).startRun({
+          issue: { id: "i2", identifier: "B-1", title: "B-1" },
+          attempt: null,
+          host: "local",
+          workspacePath: "/tmp/ws",
+          prompt: "p",
+          command: "opencode run --format json",
+          runTimeoutMs: 10_000,
+          stallTimeoutMs: 10_000,
+          eventReadTimeoutMs: 10_000,
+          cancelGraceMs: 10,
+        }),
+        pid: 2,
+        startedAtMs: nowMs - 1000,
+        lastEventAtMs: nowMs - 500,
+        logsTail: [],
+        activity: { stderrLines: 0, stdoutJsonEvents: 0, stdoutMalformedLines: 0, processExitedEvents: 0 },
+        lastSessionId: "ses_test",
+        turnCount: 1,
+        tokenInput: 10,
+        tokenOutput: 5,
+        tokenTotal: 15,
+        stopPolicy: "keep",
+      });
+
+      const res = await fetch(`${base}/api/v1/state`);
+      expect(res.status).toBe(200);
+      const body = await readJson(res);
+      expect(body.opencode_totals).toEqual({ input_tokens: 10, output_tokens: 5, total_tokens: 15, seconds_running: body.opencode_totals.seconds_running });
+      expect(body.running.some((r: any) => r.issue_identifier === "B-1" && r.session_id === "ses_test")).toBe(true);
+      const b1 = body.running.find((r: any) => r.issue_identifier === "B-1");
+      expect(b1.tokens).toEqual({ input_tokens: 10, output_tokens: 5, total_tokens: 15 });
     }
 
     {

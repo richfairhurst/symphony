@@ -152,6 +152,13 @@ describe("visual CLI", () => {
       pid: 12345,
       startedAtMs: nowMs - 65_000,
       lastEventAtMs: nowMs - 2_000,
+      logsTail: [],
+      activity: {
+        stderrLines: 0,
+        stdoutJsonEvents: 0,
+        stdoutMalformedLines: 0,
+        processExitedEvents: 0,
+      },
       turnCount: 999,
       lastSessionId: "sess_abcdefghijklmnopqrstuvwxyz0123456789",
       lastEventSummary: "a very long event summary that should be truncated to fit the terminal width",

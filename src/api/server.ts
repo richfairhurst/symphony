@@ -76,6 +76,11 @@ export function startApiServer(opts: ApiServerOptions): ApiServerHandle {
       host: e.host,
       session_id: e.lastSessionId ?? null,
       turn_count: e.turnCount,
+      tokens: {
+        input_tokens: e.tokenInput ?? null,
+        output_tokens: e.tokenOutput ?? null,
+        total_tokens: e.tokenTotal ?? null,
+      },
       started_at: toIso(e.startedAtMs),
       last_event_at: toIso(e.lastEventAtMs),
       last_event: {
@@ -103,9 +108,9 @@ export function startApiServer(opts: ApiServerOptions): ApiServerHandle {
       }, 0) ?? 0;
 
     const totals = {
-      input_tokens: 0,
-      output_tokens: 0,
-      total_tokens: 0,
+      input_tokens: st.tokenInputTotal,
+      output_tokens: st.tokenOutputTotal,
+      total_tokens: st.tokenTotal,
       seconds_running: secondsRunning,
     };
 
@@ -163,6 +168,11 @@ export function startApiServer(opts: ApiServerOptions): ApiServerHandle {
                 session_id: running.lastSessionId ?? null,
                 turn_count: running.turnCount,
                 state: running.issue.state,
+                tokens: {
+                  input_tokens: running.tokenInput ?? null,
+                  output_tokens: running.tokenOutput ?? null,
+                  total_tokens: running.tokenTotal ?? null,
+                },
                 started_at: toIso(running.startedAtMs),
                 last_event_at: toIso(running.lastEventAtMs),
                 last_event: {

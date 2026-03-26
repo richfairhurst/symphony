@@ -102,12 +102,31 @@ function extractSessionId(value: unknown): string | undefined {
   const candidates = [
     anyObj.session_id,
     anyObj.sessionId,
+    anyObj.sessionID,
     anyObj.run_id,
     anyObj.runId,
     anyObj.id,
   ];
   for (const c of candidates) {
     if (typeof c === "string" && c.trim() !== "") return c;
+  }
+
+  const session = anyObj.session;
+  if (session && typeof session === "object") {
+    const s = session as Record<string, unknown>;
+    const nested = [s.id, s.session_id, s.sessionId, s.sessionID];
+    for (const c of nested) {
+      if (typeof c === "string" && c.trim() !== "") return c;
+    }
+  }
+
+  const part = anyObj.part;
+  if (part && typeof part === "object") {
+    const p = part as Record<string, unknown>;
+    const nested = [p.session_id, p.sessionId, p.sessionID];
+    for (const c of nested) {
+      if (typeof c === "string" && c.trim() !== "") return c;
+    }
   }
   return undefined;
 }

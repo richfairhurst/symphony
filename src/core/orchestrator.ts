@@ -677,6 +677,26 @@ function extractUsageDelta(obj: Record<string, unknown>): TokenDelta | null {
     }
   }
 
+  // Opencode CLI emits token usage under a tokens object (often nested under part).
+  // Example:
+  //   { type: "step_finish", sessionID: "...", part: { tokens: { input: 223, output: 127, total: 22878, ... } } }
+  const tokensCandidates: unknown[] = [obj.tokens];
+  const part = obj.part;
+  if (isRecord(part)) tokensCandidates.push(part.tokens);
+  for (const t of tokensCandidates) {
+    if (!isRecord(t)) continue;
+    const input = readNumber(t.input ?? t.input_tokens ?? t.prompt_tokens ?? t.promptTokens);
+    const output = readNumber(t.output ?? t.output_tokens ?? t.completion_tokens ?? t.completionTokens);
+    const total = readNumber(t.total ?? t.total_tokens ?? t.totalTokens);
+    if (input !== undefined || output !== undefined || total !== undefined) {
+      return {
+        ...(input !== undefined ? { input } : {}),
+        ...(output !== undefined ? { output } : {}),
+        ...(total !== undefined ? { total } : {}),
+      };
+    }
+  }
+
   const input = readNumber(obj.input_tokens ?? obj.inputTokens ?? obj.prompt_tokens ?? obj.promptTokens);
   const output = readNumber(obj.output_tokens ?? obj.outputTokens ?? obj.completion_tokens ?? obj.completionTokens);
   const total = readNumber(obj.total_tokens ?? obj.totalTokens);

@@ -7,6 +7,7 @@ import { FilesystemStateStore } from "../state/store";
 import { WorkspaceManager } from "../workspace/manager";
 import { FakeClock } from "../testing/fakeClock";
 import { FakeRunner } from "../testing/fakeRunner";
+import { JsonRunner } from "../testing/fakes/jsonRunner";
 import { Orchestrator } from "./orchestrator";
 import type { LinearClient } from "../linear/client";
 import { FETCH_CANDIDATE_ISSUES_QUERY, FETCH_ISSUE_STATES_BY_IDS_QUERY } from "../linear/queries";
@@ -245,5 +246,65 @@ test("requestRefresh coalesces repeated triggers", async () => {
   const r3 = orch.requestRefresh();
   expect(r3.coalesced).toBe(false);
   await orch.tick();
+  watcher.close();
+});
+
+test("extracts token usage from opencode part.tokens", async () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "orch-test-"));
+  const workflowPath = makeWorkflow(dir, { maxConcurrentAgents: 1 });
+  const watcher = watchWorkflow(workflowPath, { env: {} });
+
+  const store = new FilesystemStateStore({ root: path.join(dir, "state") });
+  const ws = new WorkspaceManager({ workspaceRoot: path.join(dir, "ws"), hooks: { timeoutMs: 1 } });
+  const runner = new JsonRunner([
+    {
+      kind: "success",
+      stdoutJson: [
+        {
+          type: "step_finish",
+          sessionID: "ses_test",
+          part: { tokens: { input: 2, output: 3, total: 5 } },
+        },
+      ],
+    },
+  ]);
+  const clock = new FakeClock();
+
+  const linearClient: LinearClient = {
+    graphqlRequest: async (query: string) => {
+      if (query.includes("FetchCandidateIssues")) {
+        return {
+          issues: {
+            nodes: [issue("i1", "A-1", "Todo")],
+            pageInfo: { hasNextPage: false, endCursor: null },
+          },
+        };
+      }
+      if (query.includes("FetchIssueStatesByIds")) {
+        return { issues: { nodes: [] } };
+      }
+      throw new Error("unexpected query");
+    },
+  } as unknown as LinearClient;
+
+  const orch = new Orchestrator({
+    workflowWatcher: watcher,
+    linearClient,
+    workspaceManager: ws,
+    runner,
+    stateStore: store,
+    clock,
+  });
+
+  await orch.start();
+  for (let i = 0; i < 25; i++) {
+    if (orch.getRuntimeState().tokenTotal !== null) break;
+    await new Promise((r) => setTimeout(r, 0));
+  }
+
+  const st = orch.getRuntimeState();
+  expect(st.tokenInputTotal).toBe(2);
+  expect(st.tokenOutputTotal).toBe(3);
+  expect(st.tokenTotal).toBe(5);
   watcher.close();
 });
