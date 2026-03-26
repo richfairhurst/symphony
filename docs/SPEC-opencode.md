@@ -277,7 +277,8 @@ No delta. Required fields remain:
 Delta:
 
 - Upstream uses the field name `codex_totals` in the suggested API shape.
-- We keep the same JSON shape for compatibility, but the totals represent opencode usage.
+- The API exposes `opencode_totals` as the preferred field name.
+- Backward compatibility: `codex_totals` is kept as a deprecated alias (identical shape/values).
 
 ### 13.5 Session Metrics and Token Accounting
 

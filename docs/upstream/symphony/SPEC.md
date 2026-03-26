@@ -260,7 +260,8 @@ Fields:
 - `claimed` (set of issue IDs reserved/running/retrying)
 - `retry_attempts` (map `issue_id -> RetryEntry`)
 - `completed` (set of issue IDs; bookkeeping only, not dispatch gating)
-- `codex_totals` (aggregate tokens + runtime seconds)
+- `opencode_totals` (aggregate tokens + runtime seconds)
+  - Deprecated alias: `codex_totals` (same shape/values)
 - `codex_rate_limits` (latest rate-limit snapshot from agent events)
 
 ### 4.2 Stable Identifiers and Normalization Rules
@@ -1301,11 +1302,12 @@ should return:
 - `running` (list of running session rows)
 - each running row should include `turn_count`
 - `retrying` (list of retry queue rows)
-- `codex_totals`
+- `opencode_totals`
   - `input_tokens`
   - `output_tokens`
   - `total_tokens`
   - `seconds_running` (aggregate runtime seconds as of snapshot time, including active sessions)
+  - Deprecated alias: `codex_totals` (same shape/values)
 - `rate_limits` (latest coding-agent rate limit payload, if available)
 
 Recommended snapshot error modes:
@@ -1439,6 +1441,12 @@ Minimum endpoints:
           "error": "no available orchestrator slots"
         }
       ],
+      "opencode_totals": {
+        "input_tokens": 5000,
+        "output_tokens": 2400,
+        "total_tokens": 7400,
+        "seconds_running": 1834.2
+      },
       "codex_totals": {
         "input_tokens": 5000,
         "output_tokens": 2400,
@@ -1702,6 +1710,7 @@ function start_service():
     claimed: set(),
     retry_attempts: {},
     completed: set(),
+    opencode_totals: {input_tokens: 0, output_tokens: 0, total_tokens: 0, seconds_running: 0},
     codex_totals: {input_tokens: 0, output_tokens: 0, total_tokens: 0, seconds_running: 0},
     codex_rate_limits: null
   }
