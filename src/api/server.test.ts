@@ -155,6 +155,16 @@ describe("api server", () => {
     }
 
     {
+      const res = await fetch(`${base}/api/v1/issues/B-1`);
+      expect(res.status).toBe(200);
+      const body = await readJson(res);
+      expect(body.status).toBe("running");
+      expect(body.running.session_id).toBe("ses_test");
+      expect(body.running).toHaveProperty("opencode_session");
+      expect(body.running.opencode_session).toBe(null);
+    }
+
+    {
       const res = await fetch(`${base}/api/v1/issues/NOPE`);
       expect(res.status).toBe(404);
       expect(await readJson(res)).toEqual({

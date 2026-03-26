@@ -166,6 +166,7 @@ export function startApiServer(opts: ApiServerOptions): ApiServerHandle {
             : {
                 host: running.host,
                 session_id: running.lastSessionId ?? null,
+                opencode_session: running.opencodeSession ?? null,
                 turn_count: running.turnCount,
                 state: running.issue.state,
                 tokens: {
