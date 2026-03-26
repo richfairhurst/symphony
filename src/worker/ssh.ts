@@ -280,7 +280,7 @@ export class SshOpencodeRunner implements Runner {
 
     const startedAt = Date.now();
     let lastEventAt = startedAt;
-    let lastStdoutJsonAt = startedAt;
+    let lastReadAt = startedAt;
     let abortReason: RunnerAbortReason | undefined;
     let ended = false;
 
@@ -422,7 +422,7 @@ export class SshOpencodeRunner implements Runner {
       if (params.stallTimeoutMs > 0 && now - lastEventAt > params.stallTimeoutMs) {
         abort("stalled");
       }
-      if (params.eventReadTimeoutMs > 0 && now - lastStdoutJsonAt > params.eventReadTimeoutMs) {
+      if (params.eventReadTimeoutMs > 0 && now - lastReadAt > params.eventReadTimeoutMs) {
         abort("event_read_timeout");
       }
     }, 250);
@@ -430,6 +430,7 @@ export class SshOpencodeRunner implements Runner {
 
     const onAnyOutput = (ts: number) => {
       lastEventAt = ts;
+      lastReadAt = ts;
     };
 
     const extractSessionId = (value: unknown): string | undefined => {
@@ -448,7 +449,6 @@ export class SshOpencodeRunner implements Runner {
       onAnyOutput(ts);
       try {
         const parsed = JSON.parse(line) as unknown;
-        lastStdoutJsonAt = ts;
         const sessionId = extractSessionId(parsed);
         queue.push(
           sessionId === undefined

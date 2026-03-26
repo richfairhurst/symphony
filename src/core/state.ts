@@ -1,5 +1,5 @@
 import type { LinearIssue } from "../linear/model";
-import type { RunnerAbortReason, RunnerHandle } from "../runner/types";
+import type { RunnerAbortReason, RunnerEvent, RunnerHandle } from "../runner/types";
 
 export type RetryEntry = {
   issueId: string;
@@ -18,6 +18,18 @@ export type RunningEntry = {
   pid?: number;
   startedAtMs: number;
   lastEventAtMs: number;
+  lastEventType?: RunnerEvent["type"];
+  lastEventSummary?: string;
+  logsTail: Array<{ ts: number; type: "stderr" | "stdout_malformed"; line: string }>;
+  activity: {
+    stderrLines: number;
+    stdoutJsonEvents: number;
+    stdoutMalformedLines: number;
+    processExitedEvents: number;
+    lastInterestingAtMs?: number;
+    lastInterestingType?: RunnerEvent["type"];
+    lastInterestingSummary?: string;
+  };
   lastSessionId?: string;
   lastEventSummary?: string;
   turnCount: number;

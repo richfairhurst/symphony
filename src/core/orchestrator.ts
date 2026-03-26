@@ -17,6 +17,59 @@ import { OrchestratorPersist } from "./persist";
 import { validateStartupConfig } from "./validate";
 import { selectSshHost } from "../worker/selector";
 
+function parseKeyValueLogLine(line: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const part of line.split(/\s+/g)) {
+    const idx = part.indexOf("=");
+    if (idx <= 0) continue;
+    const k = part.slice(0, idx);
+    const v = part.slice(idx + 1);
+    if (!k) continue;
+    if (!v) continue;
+    out[k] = v;
+  }
+  return out;
+}
+
+function summarizeOpencodeStderr(line: string): { summary: string; interesting: boolean } {
+  const kv = parseKeyValueLogLine(line);
+  const service = kv.service;
+  const type = kv.type;
+
+  // Extremely noisy: permission rulesets.
+  if (service === "permission") {
+    const perm = kv.permission ?? "permission";
+    const pattern = kv.pattern ? ` ${kv.pattern}` : "";
+    return { summary: `permission: ${perm}${pattern}`.slice(0, 200), interesting: false };
+  }
+
+  if (service === "llm") {
+    const provider = kv.providerID ?? kv.provider ?? "llm";
+    const model = kv.modelID ?? kv.model ?? "model";
+    const session = kv.sessionID ?? "";
+    return {
+      summary: `llm: ${provider}/${model}${session ? ` session=${session}` : ""}`.slice(0, 200),
+      interesting: true,
+    };
+  }
+
+  if (service === "snapshot") {
+    const hash = kv.hash ? kv.hash.slice(0, 10) : "";
+    const cwd = kv.cwd ? ` cwd=${kv.cwd}` : "";
+    return { summary: `snapshot: ${hash}${cwd}`.slice(0, 200), interesting: true };
+  }
+
+  if (service === "bus") {
+    return { summary: `bus: ${type ?? "event"}`.slice(0, 200), interesting: true };
+  }
+
+  if (service !== undefined) {
+    return { summary: `${service}${type ? `: ${type}` : ""}`.slice(0, 200), interesting: true };
+  }
+
+  return { summary: line.slice(0, 200), interesting: true };
+}
+
 export type OrchestratorLogger = {
   info?: (m: string) => void;
   warn?: (m: string) => void;
@@ -417,6 +470,13 @@ export class Orchestrator {
       startedAtMs,
       lastEventAtMs: startedAtMs,
       turnCount: 1,
+      logsTail: [],
+      activity: {
+        stderrLines: 0,
+        stdoutJsonEvents: 0,
+        stdoutMalformedLines: 0,
+        processExitedEvents: 0,
+      },
       stopPolicy: "keep",
     };
 
@@ -426,12 +486,44 @@ export class Orchestrator {
   }
 
   private async trackRun(entry: RunningEntry): Promise<void> {
+    const LOG_TAIL_MAX = 50;
     try {
       for await (const ev of entry.handle.events) {
         entry.lastEventAtMs = ev.ts;
-        if (ev.type === "process_started") {
-          entry.pid = ev.pid;
-          entry.lastEventSummary = `started pid=${ev.pid}`;
+        entry.lastEventType = ev.type;
+        if (ev.type === "stderr") {
+          entry.activity.stderrLines += 1;
+          const s = summarizeOpencodeStderr(ev.line);
+          entry.lastEventSummary = s.summary;
+          if (s.interesting) {
+            entry.activity.lastInterestingAtMs = ev.ts;
+            entry.activity.lastInterestingType = ev.type;
+            entry.activity.lastInterestingSummary = s.summary;
+          }
+          entry.logsTail.push({ ts: ev.ts, type: "stderr", line: ev.line.slice(0, 2000) });
+          if (entry.logsTail.length > LOG_TAIL_MAX) entry.logsTail.splice(0, entry.logsTail.length - LOG_TAIL_MAX);
+        } else if (ev.type === "stdout_malformed") {
+          entry.activity.stdoutMalformedLines += 1;
+          entry.lastEventSummary = ev.line.slice(0, 500);
+          entry.logsTail.push({ ts: ev.ts, type: "stdout_malformed", line: ev.line.slice(0, 2000) });
+          if (entry.logsTail.length > LOG_TAIL_MAX) entry.logsTail.splice(0, entry.logsTail.length - LOG_TAIL_MAX);
+        } else if (ev.type === "process_exited") {
+          entry.activity.processExitedEvents += 1;
+          entry.lastEventSummary = `code=${ev.code ?? "null"} abort=${ev.abortReason ?? "none"}`;
+        } else if (ev.type === "stdout_json") {
+          entry.activity.stdoutJsonEvents += 1;
+          const v = ev.value;
+          if (v && typeof v === "object") {
+            const obj = v as Record<string, unknown>;
+            const tag =
+              (typeof obj.event === "string" && obj.event) ||
+              (typeof obj.type === "string" && obj.type) ||
+              (typeof obj.status === "string" && obj.status) ||
+              "json";
+            entry.lastEventSummary = tag.slice(0, 200);
+          } else {
+            entry.lastEventSummary = "json";
+          }
         }
         if (ev.type === "stdout_json" && ev.sessionId !== undefined) {
           entry.lastSessionId = ev.sessionId;
