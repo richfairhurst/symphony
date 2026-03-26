@@ -31,7 +31,6 @@ export type RunningEntry = {
     lastInterestingSummary?: string;
   };
   lastSessionId?: string;
-  lastEventSummary?: string;
   turnCount: number;
   tokenInput?: number;
   tokenOutput?: number;

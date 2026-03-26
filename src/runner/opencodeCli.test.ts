@@ -71,7 +71,11 @@ describe("opencode CLI runner", () => {
       return {
         pid: 1,
         stdin: makeWritableSink(),
-        stdout: Readable.from(["not json\n", '{"event":"ok","session_id":"s1"}\n']),
+        stdout: Readable.from([
+          "not json\n",
+          '{"event":"ok","session_id":"s1"}\n',
+          '{"type":"step_finish","sessionID":"s2"}\n',
+        ]),
         stderr: Readable.from([]),
         kill: () => true,
         exited: Promise.resolve({ code: 0, signal: null }),
@@ -95,10 +99,13 @@ describe("opencode CLI runner", () => {
     const events: RunnerEvent[] = [];
     for await (const e of handle.events) events.push(e);
     const malformed = events.find((e) => e.type === "stdout_malformed");
-    const json = events.find((e) => e.type === "stdout_json");
+    const json = events.find((e) => e.type === "stdout_json" && (e as any).sessionId === "s1");
+    const json2 = events.find((e) => e.type === "stdout_json" && (e as any).sessionId === "s2");
     expect(malformed).toBeTruthy();
     expect(json).toBeTruthy();
     expect((json as Extract<RunnerEvent, { type: "stdout_json" }>).sessionId).toBe("s1");
+    expect(json2).toBeTruthy();
+    expect((json2 as Extract<RunnerEvent, { type: "stdout_json" }>).sessionId).toBe("s2");
   });
 
   test("emits stderr diagnostics", async () => {
