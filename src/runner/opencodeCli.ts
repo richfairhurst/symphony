@@ -124,7 +124,7 @@ export class OpencodeCliRunner implements Runner {
   startRun(params: RunnerStartParams): RunnerHandle {
     const startedAt = Date.now();
     let lastEventAt = startedAt;
-    let lastStdoutJsonAt = startedAt;
+    let lastReadAt = startedAt;
     let abortReason: RunnerAbortReason | undefined;
     let ended = false;
 
@@ -190,7 +190,7 @@ export class OpencodeCliRunner implements Runner {
       if (params.stallTimeoutMs > 0 && now - lastEventAt > params.stallTimeoutMs) {
         abort("stalled");
       }
-      if (params.eventReadTimeoutMs > 0 && now - lastStdoutJsonAt > params.eventReadTimeoutMs) {
+      if (params.eventReadTimeoutMs > 0 && now - lastReadAt > params.eventReadTimeoutMs) {
         abort("event_read_timeout");
       }
     }, 250);
@@ -198,6 +198,7 @@ export class OpencodeCliRunner implements Runner {
 
     const onAnyOutput = (ts: number) => {
       lastEventAt = ts;
+      lastReadAt = ts;
     };
 
     const stdoutRl = readline.createInterface({ input: proc.stdout, crlfDelay: Infinity });
@@ -206,7 +207,6 @@ export class OpencodeCliRunner implements Runner {
       onAnyOutput(ts);
       try {
         const parsed = JSON.parse(line) as unknown;
-        lastStdoutJsonAt = ts;
         const sessionId = extractSessionId(parsed);
         queue.push(
           sessionId === undefined

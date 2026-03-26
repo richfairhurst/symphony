@@ -8,6 +8,12 @@ function toIso(ms: number): string {
   return new Date(ms).toISOString();
 }
 
+function safeIso(ms: number | null | undefined): string | null {
+  if (ms === null || ms === undefined) return null;
+  if (!Number.isFinite(ms)) return null;
+  return toIso(ms);
+}
+
 function safeParseInt(s: string | undefined): number | undefined {
   if (s === undefined) return undefined;
   const n = Number.parseInt(s, 10);
@@ -72,6 +78,10 @@ export function startApiServer(opts: ApiServerOptions): ApiServerHandle {
       turn_count: e.turnCount,
       started_at: toIso(e.startedAtMs),
       last_event_at: toIso(e.lastEventAtMs),
+      last_event: {
+        type: e.lastEventType ?? null,
+        summary: e.lastEventSummary ?? null,
+      },
     }));
 
     const retrying = Array.from(st.retryQueue.values())
@@ -152,6 +162,26 @@ export function startApiServer(opts: ApiServerOptions): ApiServerHandle {
                 state: running.issue.state,
                 started_at: toIso(running.startedAtMs),
                 last_event_at: toIso(running.lastEventAtMs),
+                last_event: {
+                  type: running.lastEventType ?? null,
+                  summary: running.lastEventSummary ?? null,
+                },
+                logs_tail: running.logsTail.map((e) => ({
+                  ts: safeIso(e.ts),
+                  type: e.type,
+                  line: e.line,
+                })),
+                activity: {
+                  stderr_lines: running.activity.stderrLines,
+                  stdout_json_events: running.activity.stdoutJsonEvents,
+                  stdout_malformed_lines: running.activity.stdoutMalformedLines,
+                  process_exited_events: running.activity.processExitedEvents,
+                  last_interesting_at: safeIso(running.activity.lastInterestingAtMs),
+                  last_interesting: {
+                    type: running.activity.lastInterestingType ?? null,
+                    summary: running.activity.lastInterestingSummary ?? null,
+                  },
+                },
               },
         retry:
           retry === undefined

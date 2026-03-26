@@ -50,6 +50,13 @@ describe("visual CLI", () => {
       handle: makeHandle(),
       startedAtMs: nowMs - 65_000,
       lastEventAtMs: nowMs - 2_000,
+      logsTail: [],
+      activity: {
+        stderrLines: 0,
+        stdoutJsonEvents: 0,
+        stdoutMalformedLines: 0,
+        processExitedEvents: 0,
+      },
       turnCount: 3,
       stopPolicy: "keep",
     });
