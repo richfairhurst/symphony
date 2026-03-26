@@ -102,7 +102,9 @@ describe("api server", () => {
       expect(body.counts).toEqual({ running: 0, retrying: 0 });
       expect(Array.isArray(body.running)).toBe(true);
       expect(Array.isArray(body.retrying)).toBe(true);
+      expect(body.opencode_totals).toHaveProperty("seconds_running");
       expect(body.codex_totals).toHaveProperty("seconds_running");
+      expect(body.opencode_totals).toEqual(body.codex_totals);
     }
 
     {
