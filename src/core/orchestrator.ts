@@ -16,6 +16,7 @@ import { createEmptyState, type OrchestratorRuntimeState, type RetryEntry, type 
 import { OrchestratorPersist } from "./persist";
 import { validateStartupConfig } from "./validate";
 import { selectSshHost } from "../worker/selector";
+import { OpencodeSessionIntrospector } from "../opencode/sessionIntrospection";
 
 function parseKeyValueLogLine(line: string): Record<string, string> {
   const out: Record<string, string> = {};
@@ -100,6 +101,7 @@ export class Orchestrator {
 
   private readonly state: OrchestratorRuntimeState;
   private pollTimer: TimeoutHandle | null = null;
+  private opencodeSessionPollTimer: TimeoutHandle | null = null;
   private stopped = false;
   private stopPromise: Promise<void> | null = null;
 
@@ -107,6 +109,9 @@ export class Orchestrator {
   private tickRequested = false;
   private refreshPending = false;
   private lastRefreshRequestedAtMs: number | null = null;
+
+  private readonly opencodeSessionIntrospector: OpencodeSessionIntrospector;
+  private readonly opencodeSessionPollIntervalMs = 1_000;
 
   constructor(opts: OrchestratorOptions) {
     this.workflowWatcher = opts.workflowWatcher;
@@ -119,6 +124,7 @@ export class Orchestrator {
     this.shutdownWaitTimeoutMs = opts.shutdownWaitTimeoutMs ?? 10_000;
     this.hostSelector = opts.hostSelector ?? (() => "local");
     this.state = createEmptyState();
+    this.opencodeSessionIntrospector = new OpencodeSessionIntrospector({ env: process.env });
   }
 
   getRuntimeState(): OrchestratorRuntimeState {
@@ -168,6 +174,7 @@ export class Orchestrator {
 
     await this.tick();
     this.scheduleNextTick();
+    this.scheduleOpencodeSessionPoll();
   }
 
   private scheduleNextTick(): void {
@@ -192,6 +199,11 @@ export class Orchestrator {
       this.pollTimer = null;
     }
 
+    if (this.opencodeSessionPollTimer) {
+      this.clock.clearTimeout(this.opencodeSessionPollTimer);
+      this.opencodeSessionPollTimer = null;
+    }
+
     for (const r of this.state.running.values()) {
       r.stopPolicy = "release";
       r.stopReason = "shutdown";
@@ -206,9 +218,50 @@ export class Orchestrator {
     this.stopPromise = (async () => {
       await Promise.race([waitAll.then(() => undefined), timed]);
       await this.persistSnapshot();
+      this.opencodeSessionIntrospector.close();
     })();
 
     return this.stopPromise;
+  }
+
+  private scheduleOpencodeSessionPoll(): void {
+    if (this.stopped) return;
+    if (this.opencodeSessionPollTimer) this.clock.clearTimeout(this.opencodeSessionPollTimer);
+    this.opencodeSessionPollTimer = this.clock.setTimeout(() => {
+      void this.pollOpencodeSessionsOnce()
+        .catch(() => undefined)
+        .finally(() => this.scheduleOpencodeSessionPoll());
+    }, this.opencodeSessionPollIntervalMs);
+  }
+
+  private async pollOpencodeSessionsOnce(): Promise<void> {
+    const nowMs = this.clock.nowMs();
+    if (this.state.running.size === 0) return;
+
+    for (const r of this.state.running.values()) {
+      if (this.stopped) return;
+      if (r.host !== "local") {
+        r.opencodeSession = null;
+        continue;
+      }
+      const last = r.opencodeSessionLastPolledAtMs;
+      if (last !== undefined && nowMs - last < this.opencodeSessionPollIntervalMs) continue;
+      r.opencodeSessionLastPolledAtMs = nowMs;
+
+      let workspacePath: string;
+      try {
+        workspacePath = this.workspaceManager.getWorkspaceInfo(r.issue.identifier, r.host).workspacePath;
+      } catch {
+        r.opencodeSession = null;
+        continue;
+      }
+
+      r.opencodeSession = this.opencodeSessionIntrospector.getSessionView({
+        workspacePath,
+        nowMs,
+        tailLimit: 80,
+      });
+    }
   }
 
   private async persistSnapshot(): Promise<void> {
@@ -470,6 +523,7 @@ export class Orchestrator {
       startedAtMs,
       lastEventAtMs: startedAtMs,
       turnCount: 1,
+      opencodeSession: null,
       logsTail: [],
       activity: {
         stderrLines: 0,

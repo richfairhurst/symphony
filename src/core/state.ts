@@ -1,5 +1,6 @@
 import type { LinearIssue } from "../linear/model";
 import type { RunnerAbortReason, RunnerEvent, RunnerHandle } from "../runner/types";
+import type { OpencodeSessionView } from "../opencode/sessionIntrospection";
 
 export type RetryEntry = {
   issueId: string;
@@ -31,6 +32,8 @@ export type RunningEntry = {
     lastInterestingSummary?: string;
   };
   lastSessionId?: string;
+  opencodeSession?: OpencodeSessionView | null;
+  opencodeSessionLastPolledAtMs?: number;
   turnCount: number;
   tokenInput?: number;
   tokenOutput?: number;

@@ -128,6 +128,16 @@ function colorStage(stage: string): string {
   return stage;
 }
 
+function colorToolStatus(status: string | null | undefined): string {
+  const s = (status ?? "").trim().toLowerCase();
+  if (s === "pending") return `${ANSI.red}${status}${ANSI.reset}`;
+  if (s === "running") return `${ANSI.yellow}${status}${ANSI.reset}`;
+  if (s === "failed" || s === "error") return `${ANSI.red}${status}${ANSI.reset}`;
+  if (s === "completed" || s === "success") return `${ANSI.green}${status}${ANSI.reset}`;
+  if (s === "") return "-";
+  return status ?? "-";
+}
+
 function boxRule(width: number): string {
   return `+${"-".repeat(Math.max(0, width - 2))}+`;
 }
@@ -387,6 +397,41 @@ export function renderVisualScreen(opts: {
     }
     if (running.length > maxRows) {
       lines.push(boxLine(width, dim(`(+${running.length - maxRows} more)`)));
+    }
+  }
+
+  lines.push(boxRule(width));
+  lines.push(boxLine(width, bold("OPENCODE SESSION")));
+  if (running.length === 0) {
+    lines.push(boxLine(width, dim("n/a")));
+  } else {
+    const focus = running[0]!;
+    const ses = focus.opencodeSession ?? null;
+    const header = `${bold(focus.issue.identifier)}  ${dim("host")}: ${focus.host}`;
+    lines.push(boxLine(width, header));
+    if (!ses) {
+      lines.push(boxLine(width, dim("n/a (db missing/unavailable, or no matching session)")));
+    } else {
+      const summary = `${dim("summary")}: ${bold(ses.summary)}`;
+      const sid = `${dim("id")}: ${truncateEnd(ses.id, 40)}  ${dim("updated")}: ${formatClock(ses.updated_at)}`;
+      lines.push(boxLine(width, summary));
+      lines.push(boxLine(width, sid));
+
+      const maxTail = width < 80 ? 4 : width < 110 ? 6 : 10;
+      const tail = ses.tail.slice(Math.max(0, ses.tail.length - maxTail));
+      if (tail.length === 0) {
+        lines.push(boxLine(width, dim("(no parts)")));
+      } else {
+        for (const e of tail) {
+          const ts = formatClock(e.ts);
+          const type = e.type ?? "-";
+          const tool = e.tool ?? "-";
+          const status = colorToolStatus(e.status);
+          const text = e.text ? truncateEnd(e.text, 80) : "";
+          const line = `${dim(ts)}  ${bold(type)}  ${tool} ${status}${text ? `  ${dim(text)}` : ""}`;
+          lines.push(boxLine(width, line));
+        }
+      }
     }
   }
 
