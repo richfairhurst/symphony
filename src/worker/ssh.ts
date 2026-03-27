@@ -76,7 +76,7 @@ async function runSshScript(opts: {
       try {
         child.kill("SIGTERM");
       } catch {
-        // ignore
+        // ignore: process may already be dead
       }
     }, opts.timeoutMs);
 
@@ -437,14 +437,14 @@ export class SshOpencodeRunner implements Runner {
       try {
         child.kill("SIGTERM");
       } catch {
-        // ignore
+        // ignore: process may already be dead
       }
       setTimer(params.cancelGraceMs, () => {
         if (ended) return;
         try {
           child.kill("SIGKILL");
         } catch {
-          // ignore
+          // ignore: process may already be dead
         }
       });
     };

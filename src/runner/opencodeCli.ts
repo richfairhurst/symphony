@@ -189,14 +189,14 @@ export class OpencodeCliRunner implements Runner {
       try {
         proc.kill("SIGTERM");
       } catch {
-        // ignore
+        // ignore: process may already be dead
       }
       setTimer(params.cancelGraceMs, () => {
         if (ended) return;
         try {
           proc.kill("SIGKILL");
         } catch {
-          // ignore
+          // ignore: process may already be dead
         }
       });
     };

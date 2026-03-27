@@ -177,7 +177,7 @@ export async function runCli(argv: string[], io: CliIo = {}): Promise<number> {
       await fs.mkdir(stateRoot, { recursive: true, mode: 0o700 });
       await fs.chmod(stateRoot, 0o700).catch(() => undefined);
     } catch {
-      // ignore
+      // ignore: state dir best-effort; can run without persistence
     }
   }
 
@@ -189,7 +189,7 @@ export async function runCli(argv: string[], io: CliIo = {}): Promise<number> {
     try {
       sinks.push(createJsonlFileSink(path.join(stateRoot, "cli.jsonl")));
     } catch {
-      // ignore file sink errors; visual mode still works
+      // ignore: file sink best-effort; visual mode still works
     }
     return createLogger(createTeeSink(sinks));
   })();

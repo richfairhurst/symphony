@@ -229,7 +229,7 @@ export function startApiServer(opts: ApiServerOptions): ApiServerHandle {
         await req.text().catch(() => undefined);
       }
     } catch {
-      // ignore
+      // ignore: best-effort body drain; still safe to refresh
     }
 
     const res = opts.orchestrator.requestRefresh();
