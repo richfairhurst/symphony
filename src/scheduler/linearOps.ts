@@ -5,6 +5,7 @@ import {
 } from "../linear";
 import type { LinearClient } from "../linear/client";
 import type { LinearIssue } from "../linear/model";
+import { asString, isRecord } from "../utils/typeGuards";
 
 type CandidateIssuesPage = {
   issues?: {
@@ -18,14 +19,6 @@ type IssueStatesPage = {
     nodes?: Array<{ id?: unknown; identifier?: unknown; state?: { name?: unknown }; updatedAt?: unknown }>;
   };
 };
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
-}
-
-function asString(value: unknown): string | undefined {
-  return typeof value === "string" ? value : undefined;
-}
 
 export async function fetchCandidateIssues(opts: {
   linearClient: LinearClient;

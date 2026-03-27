@@ -1,4 +1,5 @@
 import { LinearClient } from "../linear/client";
+import { asString, isRecord } from "../utils/typeGuards";
 
 type Args = {
   identifier: string;
@@ -61,14 +62,6 @@ function parseArgs(argv: string[]): Args | { error: string } {
     json,
     ...(setState !== undefined ? { setState } : {}),
   };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
-}
-
-function asString(value: unknown): string | undefined {
-  return typeof value === "string" ? value : undefined;
 }
 
 type IssueLookupResult = {

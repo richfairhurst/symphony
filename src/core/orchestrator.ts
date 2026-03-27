@@ -17,6 +17,7 @@ import { OrchestratorPersist } from "./persist";
 import { validateStartupConfig } from "./validate";
 import { selectSshHost } from "../worker/selector";
 import { OpencodeSessionIntrospector, redactObviousSecrets } from "../opencode/sessionIntrospection";
+import { isRecord } from "../utils/typeGuards";
 
 function parseKeyValueLogLine(line: string): Record<string, string> {
   const out: Record<string, string> = {};
@@ -684,10 +685,6 @@ export class Orchestrator {
       await this.persist.writeRetry({ active: true, ...r });
     }
   }
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
 function readNumber(value: unknown): number | undefined {

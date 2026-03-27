@@ -1,8 +1,5 @@
 import { redactObviousSecrets } from "../opencode/sessionIntrospection";
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
-}
+import { isRecord } from "../utils/typeGuards";
 
 const REDACT_KEY_RE = /(^|_)(api[_-]?key|token|secret|password|authorization)($|_)/i;
 

@@ -5,6 +5,7 @@ import { loadWorkflowDefinition } from "../config/workflow";
 import { resolveWorkflow } from "../config/resolve";
 import type { WorkflowError } from "../config/errors";
 import { redactBundleString, redactBundleValue } from "./redaction";
+import { isRecord } from "../utils/typeGuards";
 
 export type DebugBundle = {
   bundleVersion: number;
@@ -73,10 +74,6 @@ async function readTailLines(filePath: string, opts: { maxBytes: number; maxLine
       // ignore
     }
   }
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
 function serializeWorkflowError(err: WorkflowError): { code?: string; message: string } {

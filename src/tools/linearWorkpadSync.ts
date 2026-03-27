@@ -2,6 +2,7 @@ export {};
 
 import { LinearClient } from "../linear/client";
 import { LinearError } from "../linear/errors";
+import { asString, isRecord } from "../utils/typeGuards";
 
 function usage(): string {
   return [
@@ -63,14 +64,6 @@ function parseArgs(argv: string[]): Args | { error: string } {
   }
 
   return { identifier, filePath, marker, dryRun, json };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
-}
-
-function asString(value: unknown): string | undefined {
-  return typeof value === "string" ? value : undefined;
 }
 
 async function readFileUtf8(path: string): Promise<string> {
