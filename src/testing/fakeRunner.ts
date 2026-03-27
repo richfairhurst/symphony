@@ -2,9 +2,7 @@ import { AsyncQueue } from "../utils/asyncQueue";
 import type { Runner, RunnerAbortReason, RunnerEvent, RunnerHandle, RunnerStartParams, RunnerWaitResult } from "../runner/types";
 
 export type FakeRunPlan =
-  | { kind: "success" }
-  | { kind: "fail"; code?: number }
-  | { kind: "hang" };
+  ({ events?: RunnerEvent[] } & ({ kind: "success" } | { kind: "fail"; code?: number } | { kind: "hang" }));
 
 export class FakeRunner implements Runner {
   private plans: FakeRunPlan[];
@@ -27,37 +25,53 @@ export class FakeRunner implements Runner {
     const q = new AsyncQueue<RunnerEvent>();
     q.push({ type: "process_started", ts: startedAt, pid, cwd: params.workspacePath, argv: ["fake"] });
 
+    for (const ev of plan.events ?? []) q.push(ev);
+
     let abortReason: RunnerAbortReason | undefined;
 
+    let resolveWait: ((v: RunnerWaitResult) => void) | null = null;
+    let resolved = false;
     const waitPromise: Promise<RunnerWaitResult> = new Promise((resolve) => {
-      if (plan.kind === "hang") return;
+      resolveWait = resolve;
+    });
+
+    const resolveOnce = (v: RunnerWaitResult) => {
+      if (resolved) return;
+      resolved = true;
+      resolveWait?.(v);
+    };
+
+    const finish = (opts: { endedAt: number; code: number | null; signal: NodeJS.Signals | null; abortReason?: RunnerAbortReason }) => {
+      q.push({
+        type: "process_exited",
+        ts: opts.endedAt,
+        code: opts.code,
+        signal: opts.signal,
+        ...(opts.abortReason !== undefined ? { abortReason: opts.abortReason } : {}),
+        lastEventTs: opts.endedAt,
+      });
+      q.close();
+      resolveOnce({
+        pid,
+        code: opts.code,
+        signal: opts.signal,
+        startedAt,
+        endedAt: opts.endedAt,
+        lastEventAt: opts.endedAt,
+        ...(opts.abortReason !== undefined ? { abortReason: opts.abortReason } : {}),
+      });
+    };
+
+    if (plan.kind !== "hang") {
       const endedAt = startedAt + 1;
       const code = plan.kind === "success" ? 0 : (plan.code ?? 1);
-      q.push({ type: "process_exited", ts: endedAt, code, signal: null, lastEventTs: endedAt });
-      q.close();
-      resolve({
-        pid,
-        code,
-        signal: null,
-        startedAt,
-        endedAt,
-        lastEventAt: endedAt,
-        ...(abortReason !== undefined ? { abortReason } : {}),
-      });
-    });
+      finish({ endedAt, code, signal: null });
+    }
 
     const abort = (reason: RunnerAbortReason = "cancelled") => {
       abortReason = reason;
       this.abortCalls.push({ pid, reason });
-      q.push({
-        type: "process_exited",
-        ts: Date.now(),
-        code: null,
-        signal: "SIGTERM",
-        abortReason,
-        lastEventTs: Date.now(),
-      });
-      q.close();
+      finish({ endedAt: Date.now(), code: null, signal: "SIGTERM", abortReason });
     };
 
     const wait = () => waitPromise;
