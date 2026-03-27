@@ -12,6 +12,7 @@ import type {
 import type { Logger, WorkspaceHooks, WorkspaceManagerLike } from "../workspace/manager";
 import { throwOnHookFailure, type HookResult } from "../workspace/hooks";
 import { getWorkspacePath } from "../workspace/paths";
+import { validateSshHost } from "./sshHost";
 
 function shellEscape(arg: string): string {
   // Safe for embedding as a single word in `bash -lc`.
@@ -29,6 +30,12 @@ async function runSshScript(opts: {
   timeoutMs: number;
 }): Promise<HookResult> {
   const startedAt = Date.now();
+
+  const hostValidation = validateSshHost(opts.host);
+  if (!hostValidation.ok) {
+    throw new Error(`Invalid SSH host: ${hostValidation.error.reason} (got: ${JSON.stringify(opts.host)})`);
+  }
+
   return await new Promise<HookResult>((resolve) => {
     const child: ChildProcessWithoutNullStreams = spawn(
       "ssh",
@@ -39,6 +46,7 @@ async function runSshScript(opts: {
         "ServerAliveInterval=15",
         "-o",
         "ServerAliveCountMax=2",
+        "--",
         opts.host,
         "bash",
         "-s",
@@ -120,10 +128,16 @@ export class SshWorkspaceManager implements WorkspaceManagerLike {
   }
 
   private requireHost(host?: string): string {
-    const h = (host ?? "").trim();
-    if (h === "" || h === "local") {
+    const h = host ?? "";
+    if (h.trim() === "" || h === "local") {
       throw new Error("SshWorkspaceManager requires a non-local host");
     }
+
+    const hostValidation = validateSshHost(h);
+    if (!hostValidation.ok) {
+      throw new Error(`Invalid SSH host: ${hostValidation.error.reason} (got: ${JSON.stringify(h)})`);
+    }
+
     return h;
   }
 
@@ -278,6 +292,13 @@ export class SshOpencodeRunner implements Runner {
       throw new Error("SshOpencodeRunner requires params.host to be a non-local host");
     }
 
+    const hostValidation = validateSshHost(params.host);
+    if (!hostValidation.ok) {
+      throw new Error(
+        `Invalid SSH host: ${hostValidation.error.reason} (got: ${JSON.stringify(params.host)})`,
+      );
+    }
+
     const startedAt = Date.now();
     let lastEventAt = startedAt;
     let lastReadAt = startedAt;
@@ -362,6 +383,7 @@ export class SshOpencodeRunner implements Runner {
         "ServerAliveInterval=15",
         "-o",
         "ServerAliveCountMax=2",
+        "--",
         params.host,
         "bash",
         "-lc",
@@ -384,7 +406,20 @@ export class SshOpencodeRunner implements Runner {
       ts: startedAt,
       pid,
       cwd: params.workspacePath,
-      argv: ["ssh", params.host, "bash", "-lc", remoteCmd],
+      argv: [
+        "ssh",
+        "-o",
+        "BatchMode=yes",
+        "-o",
+        "ServerAliveInterval=15",
+        "-o",
+        "ServerAliveCountMax=2",
+        "--",
+        params.host,
+        "bash",
+        "-lc",
+        remoteCmd,
+      ],
     });
 
     child.stdin.end();
