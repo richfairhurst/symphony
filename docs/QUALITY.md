@@ -4,6 +4,7 @@
 
 - Tests: `bun test`
 - Typecheck: `bun run typecheck`
+- Architecture boundaries: `bun run arch:lint`
 
 ## Project layout
 
