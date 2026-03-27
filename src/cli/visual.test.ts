@@ -47,6 +47,7 @@ describe("visual CLI", () => {
         description: null,
         priority: null,
         state: "Todo",
+        branch_name: null,
         url: null,
         labels: [],
         blocked_by: [],
@@ -118,6 +119,7 @@ describe("visual CLI", () => {
         description: null,
         priority: null,
         state: "In Progress",
+        branch_name: null,
         url: null,
         labels: [],
         blocked_by: [],
@@ -157,6 +159,62 @@ describe("visual CLI", () => {
 
     state.running.set("1", mkRunning("RIC-26"));
     state.running.set("2", mkRunning("RIC-25"));
+
+    const renderHeaderLine = (nowMs: number): string => {
+      const out = stripAnsi(
+        renderVisualScreen({
+          nowMs,
+          frame: 0,
+          state,
+          logs: [],
+          width: 100,
+          workflowPath: "/tmp/WORKFLOW.md",
+        }),
+      );
+      const lines = out.split("\n");
+      const idx = lines.findIndex((l) => l.includes("OPENCODE SESSION"));
+      return idx >= 0 ? (lines[idx + 1] ?? "") : "";
+    };
+
+    expect(renderHeaderLine(10_000)).toContain("RIC-25");
+    expect(renderHeaderLine(10_000)).toContain("(1/2)");
+
+    expect(renderHeaderLine(15_000)).toContain("RIC-26");
+    expect(renderHeaderLine(15_000)).toContain("(2/2)");
+  });
+
+  test("does not show rotation position for a single agent", () => {
+    const state = createEmptyState();
+    state.running.set("1", {
+      issue: {
+        id: "1",
+        identifier: "RIC-1",
+        title: "t",
+        description: null,
+        priority: null,
+        state: "In Progress",
+        branch_name: null,
+        url: null,
+        labels: [],
+        blocked_by: [],
+        created_at: null,
+        updated_at: null,
+      },
+      attempt: 1,
+      host: "local",
+      handle: makeHandle(),
+      startedAtMs: 0,
+      lastEventAtMs: 0,
+      logsTail: [],
+      activity: {
+        stderrLines: 0,
+        stdoutJsonEvents: 0,
+        stdoutMalformedLines: 0,
+        processExitedEvents: 0,
+      },
+      turnCount: 0,
+      stopPolicy: "keep",
+    });
 
     const out = stripAnsi(
       renderVisualScreen({
@@ -210,6 +268,7 @@ describe("visual CLI", () => {
         description: null,
         priority: null,
         state: "In Progress",
+        branch_name: null,
         url: null,
         labels: [],
         blocked_by: [],

@@ -7,6 +7,7 @@ fragment IssueFields on Issue {
   title
   description
   priority
+  branchName
   url
   createdAt
   updatedAt

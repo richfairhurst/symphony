@@ -5,6 +5,7 @@ import type { LinearIssue } from "./model";
 const base: Omit<LinearIssue, "id" | "identifier" | "title" | "state"> = {
   description: null,
   priority: null,
+  branch_name: null,
   url: null,
   labels: [],
   blocked_by: [],
