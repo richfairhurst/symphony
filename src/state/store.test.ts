@@ -37,4 +37,33 @@ describe("filesystem state store", () => {
       await fs.rm(root, { recursive: true, force: true });
     }
   });
+
+  test("creates state dirs/files with no group/world perms", async () => {
+    if (process.platform === "win32") return;
+
+    const root = await makeTempDir("symphony-state-");
+    try {
+      const store = new FilesystemStateStore({ root });
+      await store.writeRootJsonAtomic("orchestrator_snapshot", { ok: true });
+      await store.writeJsonAtomic("ABC-3", "issue_snapshot", { ok: true });
+
+      const issueDir = store.getIssueDir("ABC-3");
+      const rootDirSt = await fs.stat(root);
+      const issueDirSt = await fs.stat(issueDir);
+      const rootFileSt = await fs.stat(path.join(root, "orchestrator_snapshot.json"));
+      const issueFileSt = await fs.stat(path.join(issueDir, "issue_snapshot.json"));
+
+      expect(rootDirSt.mode & 0o077).toBe(0);
+      expect(issueDirSt.mode & 0o077).toBe(0);
+      expect(rootFileSt.mode & 0o077).toBe(0);
+      expect(issueFileSt.mode & 0o077).toBe(0);
+
+      expect(rootDirSt.mode & 0o700).toBe(0o700);
+      expect(issueDirSt.mode & 0o700).toBe(0o700);
+      expect(rootFileSt.mode & 0o600).toBe(0o600);
+      expect(issueFileSt.mode & 0o600).toBe(0o600);
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
 });

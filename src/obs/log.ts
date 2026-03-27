@@ -1,4 +1,4 @@
-import { createWriteStream, type WriteStream } from "node:fs";
+import { createWriteStream, fchmodSync, type WriteStream } from "node:fs";
 import path from "node:path";
 
 export type LogLevel = "info" | "warn" | "error";
@@ -47,7 +47,14 @@ function serializeError(err: unknown): SerializedError {
 
 export function createJsonlFileSink(filePath: string): LogSink {
   const abs = path.resolve(filePath);
-  const stream: WriteStream = createWriteStream(abs, { flags: "a" });
+  const stream: WriteStream = createWriteStream(abs, { flags: "a", mode: 0o600 });
+  stream.on("open", (fd) => {
+    try {
+      fchmodSync(fd, 0o600);
+    } catch {
+      // ignore
+    }
+  });
 
   return {
     write: (entry) => {

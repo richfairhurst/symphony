@@ -21,3 +21,9 @@ Delta map: `docs/SPEC-opencode.md`
 
 - Do not commit secrets. Linear API access uses `LINEAR_API_KEY` env.
 - Prefer env var injection over embedding credentials in `WORKFLOW.md`.
+
+## Local state + logs permissions
+
+- Orchestrator state (`.symphony_state/`) is created with `0o700` and state snapshots/logs with `0o600` on platforms/filesystems that support POSIX mode bits.
+- On Windows and some non-POSIX filesystems, Node may not enforce `chmod`/`mode` semantics; tests guard/skip where mode bits are not reliable.
+- `mode` is applied at creation time and may be further restricted by `umask`.

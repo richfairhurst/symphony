@@ -172,7 +172,8 @@ export async function runCli(argv: string[], io: CliIo = {}): Promise<number> {
   const memLogs = mode === "visual" ? createMemoryLogSink({ limit: 200 }) : null;
   if (mode === "visual") {
     try {
-      await fs.mkdir(stateRoot, { recursive: true });
+      await fs.mkdir(stateRoot, { recursive: true, mode: 0o700 });
+      await fs.chmod(stateRoot, 0o700).catch(() => undefined);
     } catch {
       // ignore
     }
