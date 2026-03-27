@@ -2,6 +2,9 @@ import { readFileSync } from "node:fs";
 import { WorkflowError } from "./errors";
 import YAML from "yaml";
 
+const MAX_FRONT_MATTER_BYTES = 64 * 1024;
+const FRONT_MATTER_MAX_ALIAS_COUNT = 0;
+
 export type WorkflowDefinition = {
   path: string;
   config: Record<string, unknown>;
@@ -67,11 +70,33 @@ export function parseWorkflowMarkdown(content: string): {
     );
   }
 
+  let frontMatterBytes = 0;
+  for (let i = 1; i < endFrontMatterIndex; i++) {
+    const line = lines[i] ?? "";
+    frontMatterBytes += Buffer.byteLength(line, "utf8");
+    if (i !== endFrontMatterIndex - 1) frontMatterBytes += 1;
+    if (frontMatterBytes > MAX_FRONT_MATTER_BYTES) {
+      throw new WorkflowError(
+        "workflow_front_matter_too_large",
+        `YAML front matter exceeds ${MAX_FRONT_MATTER_BYTES} bytes; refusing to parse`,
+      );
+    }
+  }
+
   const frontMatterText = lines.slice(1, endFrontMatterIndex).join("\n");
   let frontMatter: unknown;
   try {
-    frontMatter = YAML.parse(frontMatterText);
+    frontMatter = YAML.parse(frontMatterText, {
+      maxAliasCount: FRONT_MATTER_MAX_ALIAS_COUNT,
+    });
   } catch (err) {
+    if (err instanceof Error && err.message.includes("Excessive alias count")) {
+      throw new WorkflowError(
+        "workflow_front_matter_aliases_not_allowed",
+        "YAML front matter aliases/anchors are not allowed",
+        err,
+      );
+    }
     throw new WorkflowError(
       "workflow_parse_error",
       "Failed to parse YAML front matter",
