@@ -2,6 +2,16 @@ import { describe, expect, test } from "bun:test";
 import { LinearClient } from "./client";
 
 describe("LinearClient.graphqlRequest", () => {
+  test("refuses non-Linear endpoint by default", () => {
+    try {
+      new LinearClient({ endpoint: "https://x/graphql", apiKey: "k" });
+    } catch (err) {
+      expect(err).toEqual(expect.objectContaining({ code: "linear_unsafe_endpoint" }));
+      return;
+    }
+    throw new Error("Expected LinearClient to throw");
+  });
+
   test("sends auth header and returns data", async () => {
     const calls: Array<{ input: unknown; init: unknown }> = [];
     const fakeFetch = async (input: unknown, init?: unknown): Promise<Response> => {
@@ -9,7 +19,12 @@ describe("LinearClient.graphqlRequest", () => {
       return new Response(JSON.stringify({ data: { viewer: { id: "u1" } } }), { status: 200 });
     };
 
-    const client = new LinearClient({ endpoint: "https://x/graphql", apiKey: "k", fetch: fakeFetch });
+    const client = new LinearClient({
+      endpoint: "https://x/graphql",
+      apiKey: "k",
+      fetch: fakeFetch,
+      allowUnsafeEndpoint: true,
+    });
     const out = await client.graphqlRequest<{ viewer: { id: string } }, { a: string }>(
       "query X($a: String!) { viewer { id } }",
       { a: "b" },
@@ -40,6 +55,7 @@ describe("LinearClient.graphqlRequest", () => {
     const client = new LinearClient({
       endpoint: "https://x/graphql",
       apiKey: "k",
+      allowUnsafeEndpoint: true,
       fetch: async () => {
         throw new Error("no network");
       },
@@ -54,6 +70,7 @@ describe("LinearClient.graphqlRequest", () => {
     const client = new LinearClient({
       endpoint: "https://x/graphql",
       apiKey: "k",
+      allowUnsafeEndpoint: true,
       fetch: async () => new Response("oops", { status: 503 }),
     });
 
@@ -66,6 +83,7 @@ describe("LinearClient.graphqlRequest", () => {
     const client = new LinearClient({
       endpoint: "https://x/graphql",
       apiKey: "k",
+      allowUnsafeEndpoint: true,
       fetch: async () =>
         new Response(JSON.stringify({ errors: [{ message: "nope" }] }), { status: 200 }),
     });
@@ -79,6 +97,7 @@ describe("LinearClient.graphqlRequest", () => {
     const client = new LinearClient({
       endpoint: "https://x/graphql",
       apiKey: "k",
+      allowUnsafeEndpoint: true,
       fetch: async () => new Response(JSON.stringify({ data: null }), { status: 200 }),
     });
 

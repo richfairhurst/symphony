@@ -1,6 +1,7 @@
 export type WorkflowErrorCode =
   | "missing_workflow_file"
   | "workflow_parse_error"
+  | "workflow_invalid_tracker_endpoint"
   | "workflow_front_matter_too_large"
   | "workflow_front_matter_aliases_not_allowed"
   | "workflow_front_matter_not_a_map"

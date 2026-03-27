@@ -16,6 +16,7 @@ export const rawWorkflowConfigSchema = z
       .object({
         kind: z.string().optional(),
         endpoint: z.string().optional(),
+        allow_unsafe_endpoint: z.boolean().optional(),
         api_key: z.string().optional(),
         project_slug: z.string().optional(),
         active_states: stringList.optional(),

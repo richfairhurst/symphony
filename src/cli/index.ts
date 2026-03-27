@@ -218,7 +218,11 @@ export async function runCli(argv: string[], io: CliIo = {}): Promise<number> {
   const useDemo = isDemoTracker(cfg.tracker.kind);
   const linearClient = useDemo
     ? createDemoLinearClient()
-    : new LinearClient({ endpoint: cfg.tracker.endpoint, apiKey: cfg.tracker.apiKey ?? "" });
+    : new LinearClient({
+        endpoint: cfg.tracker.endpoint,
+        apiKey: cfg.tracker.apiKey ?? "",
+        allowUnsafeEndpoint: cfg.tracker.allowUnsafeEndpoint,
+      });
 
   const localRunner = useDemo ? createDemoRunner() : new OpencodeCliRunner({ env: process.env });
   const sshHosts = cfg.worker.sshHosts;
