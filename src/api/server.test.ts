@@ -232,4 +232,95 @@ describe("api server", () => {
     api.stop();
     watcher.close();
   });
+
+  test("issue detail redacts logs_tail and stderr summary", async () => {
+    const dir = mkdtempSync(path.join(os.tmpdir(), "api-redact-test-"));
+    const workflowPath = makeWorkflow(dir, { maxConcurrentAgents: 1 });
+    const watcher = watchWorkflow(workflowPath, { env: {} });
+
+    const store = new FilesystemStateStore({ root: path.join(dir, "state") });
+    const ws = new WorkspaceManager({ workspaceRoot: path.join(dir, "ws"), hooks: { timeoutMs: 1 } });
+
+    const now = Date.now();
+    const runner = new FakeRunner([
+      {
+        kind: "hang",
+        events: [
+          {
+            type: "stderr",
+            ts: now + 1,
+            line: "Authorization: Bearer abcdef sk-123456789012345678901234567890 password=lol",
+          },
+          {
+            type: "stdout_malformed",
+            ts: now + 2,
+            line: "oops ghp_123456789012345678901234567890 token=supersecret",
+            error: "bad_json",
+          },
+        ],
+      },
+    ]);
+
+    const orch = new Orchestrator({
+      workflowWatcher: watcher,
+      linearClient: makeLinearClient(),
+      workspaceManager: ws,
+      runner,
+      stateStore: store,
+      clock: new FakeClock(),
+    });
+
+    const issue = {
+      id: "i_redact",
+      identifier: "R-1",
+      title: "redact",
+      description: null,
+      priority: null,
+      state: "In Progress",
+      url: null,
+      labels: [],
+      blocked_by: [],
+      created_at: null,
+      updated_at: null,
+    };
+
+    await (orch as any).tryDispatch(issue, null);
+
+    const api = startApiServer({ orchestrator: orch, stateStore: store, workspaceManager: ws, port: 0 });
+    const base = `http://127.0.0.1:${api.port}`;
+
+    {
+      const deadline = Date.now() + 2_000;
+      while (Date.now() < deadline) {
+        const running = orch.getRuntimeState().running.get(issue.id);
+        if (running && running.logsTail.length >= 2) break;
+        await new Promise((r) => setTimeout(r, 5));
+      }
+      const running = orch.getRuntimeState().running.get(issue.id);
+      expect(running).not.toBe(undefined);
+      expect(running!.logsTail.length).toBeGreaterThanOrEqual(2);
+    }
+
+    const res = await fetch(`${base}/api/v1/issues/${issue.identifier}`);
+    expect(res.status).toBe(200);
+    const body = await readJson(res);
+
+    const lines = body.running.logs_tail.map((e: any) => e.line).join("\n");
+    expect(lines).toContain("[REDACTED_OPENAI_KEY]");
+    expect(lines).toContain("Bearer [REDACTED]");
+    expect(lines).toContain("password=[REDACTED]");
+    expect(lines).toContain("[REDACTED_GITHUB_TOKEN]");
+
+    expect(lines).not.toContain("sk-123456");
+    expect(lines).not.toContain("ghp_123456");
+    expect(lines).not.toContain("token=supersecret");
+
+    expect(String(body.running.last_event.summary ?? "")).not.toContain("sk-123456");
+    expect(String(body.running.last_event.summary ?? "")).not.toContain("ghp_123456");
+
+    const running = orch.getRuntimeState().running.get(issue.id);
+    running?.handle.abort("cancelled");
+    await running?.handle.wait();
+    api.stop();
+  });
 });
