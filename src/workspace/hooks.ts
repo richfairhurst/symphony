@@ -45,13 +45,13 @@ export async function runHookScript(script: string, opts: RunHookOptions): Promi
       try {
         child.kill("SIGTERM");
       } catch {
-        // ignore
+        // ignore: process may already be dead
       }
       setTimeout(() => {
         try {
           child.kill("SIGKILL");
         } catch {
-          // ignore
+          // ignore: process may already be dead
         }
       }, killGraceMs);
     }, opts.timeoutMs);

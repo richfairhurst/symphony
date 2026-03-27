@@ -370,7 +370,7 @@ export class Orchestrator {
             try {
               await this.workspaceManager.removeWorkspace(r.issue.identifier, r.host);
             } catch {
-              // ignore
+              // ignore: cleanup best-effort; issue already terminal
             }
           },
           onNonActive: async () => {
@@ -683,7 +683,7 @@ export class Orchestrator {
         }
       }
     } catch {
-      // ignore
+      // ignore: runner loop best-effort; we still persist attempt end
     } finally {
       const wait = await entry.handle.wait();
       await this.persist.writeAttemptEnd({ issue: entry.issue, attempt: entry.attempt, wait });
@@ -691,7 +691,7 @@ export class Orchestrator {
       try {
         await this.workspaceManager.runAfterRun(entry.issue.identifier, entry.host);
       } catch {
-        // ignore
+        // ignore: afterRun hook best-effort; retry logic still applies
       }
 
       this.state.running.delete(entry.issue.id);

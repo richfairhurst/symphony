@@ -71,7 +71,7 @@ async function readTailLines(filePath: string, opts: { maxBytes: number; maxLine
     try {
       await fh?.close();
     } catch {
-      // ignore
+      // ignore: close best-effort; next read will reopen
     }
   }
 }

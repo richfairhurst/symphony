@@ -531,7 +531,7 @@ export class VisualCli {
     try {
       this.renderOnce();
     } catch {
-      // ignore; cleanup should still restore the cursor
+      // ignore: cleanup render best-effort; restore cursor anyway
     } finally {
       this.stdout("\x1b[?25h\n");
     }

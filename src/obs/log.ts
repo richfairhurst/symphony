@@ -52,7 +52,7 @@ export function createJsonlFileSink(filePath: string): LogSink {
     try {
       fchmodSync(fd, 0o600);
     } catch {
-      // ignore
+      // ignore: best-effort chmod on open
     }
   });
 

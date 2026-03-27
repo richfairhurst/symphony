@@ -140,7 +140,7 @@ export class OpencodeSessionIntrospector {
     try {
       this.db?.close();
     } catch {
-      // ignore
+      // ignore: close best-effort; DB may already be closed
     }
     this.db = null;
     this.dbPath = null;
@@ -180,7 +180,7 @@ export class OpencodeSessionIntrospector {
         const updated = safeNumber(row?.time_updated);
         if (id && updated !== null) return { id, time_updated: updated };
       } catch {
-        // ignore
+        // ignore: sqlite query best-effort; fall back to broader scan
       }
 
       try {
@@ -196,7 +196,7 @@ export class OpencodeSessionIntrospector {
           if (bestEffortPathKey(dir) === targetKey) return { id, time_updated: updated };
         }
       } catch {
-        // ignore
+        // ignore: sqlite scan best-effort; return null when unavailable
       }
 
       return null;
