@@ -211,6 +211,65 @@ test("failure schedules exponential backoff retry", async () => {
   watcher.close();
 });
 
+test("hook failure during after_create does not crash orchestrator", async () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "orch-test-"));
+  const workflowPath = makeWorkflow(dir, { maxConcurrentAgents: 1 });
+  const watcher = watchWorkflow(workflowPath, { env: {} });
+
+  const stateRoot = path.join(dir, "state");
+  const store = new FilesystemStateStore({ root: stateRoot });
+  const ws = new WorkspaceManager({
+    workspaceRoot: path.join(dir, "ws"),
+    hooks: { timeoutMs: 1000, afterCreate: "exit 128" },
+  });
+  const runner = new FakeRunner([{ kind: "hang" }]);
+  const clock = new FakeClock();
+
+  const linearClient: LinearClient = {
+    graphqlRequest: async (query: string) => {
+      if (query.includes("FetchCandidateIssues")) {
+        return {
+          issues: {
+            nodes: [issue("i1", "A-1", "Todo")],
+            pageInfo: { hasNextPage: false, endCursor: null },
+          },
+        };
+      }
+      if (query.includes("FetchIssueStatesByIds")) {
+        return { issues: { nodes: [] } };
+      }
+      throw new Error("unexpected query");
+    },
+  } as unknown as LinearClient;
+
+  const orch = new Orchestrator({
+    workflowWatcher: watcher,
+    linearClient,
+    workspaceManager: ws,
+    runner,
+    stateStore: store,
+    clock,
+  });
+
+  await orch.start();
+
+  expect(orch.getRuntimeState().running.size).toBe(0);
+  expect(orch.getRuntimeState().retryQueue.size).toBe(1);
+  const retry = Array.from(orch.getRuntimeState().retryQueue.values())[0]!;
+  expect(retry.kind).toBe("failure");
+  expect(retry.attempt).toBe(1);
+  expect(retry.dueAtMs).toBe(10_000);
+  expect(retry.error).toBe("hook_failed after_create exit=128");
+  expect(orch.getRuntimeState().claimed.has("i1")).toBe(false);
+
+  // Verify we do not re-dispatch before the retry is due.
+  await orch.tick();
+  expect(orch.getRuntimeState().running.size).toBe(0);
+  expect(orch.getRuntimeState().retryQueue.size).toBe(1);
+
+  watcher.close();
+});
+
 test("shutdown cancels running sessions", async () => {
   const dir = mkdtempSync(path.join(os.tmpdir(), "orch-test-"));
   const workflowPath = makeWorkflow(dir, { maxConcurrentAgents: 1 });

@@ -62,6 +62,26 @@ export class OrchestratorPersist {
     await this.store.writeJsonAtomic(opts.issue.id, "last_attempt", payload);
   }
 
+  async writeAttemptEndDispatchFailure(opts: {
+    issue: LinearIssue;
+    attempt: number | null;
+    startedAtMs: number;
+    endedAtMs: number;
+    reason: string;
+  }): Promise<void> {
+    const payload: PersistedAttempt = {
+      issueId: opts.issue.id,
+      identifier: opts.issue.identifier,
+      attempt: opts.attempt,
+      startedAtMs: opts.startedAtMs,
+      endedAtMs: opts.endedAtMs,
+      exitCode: null,
+      signal: null,
+      abortReason: opts.reason,
+    };
+    await this.store.writeJsonAtomic(opts.issue.id, "last_attempt", payload);
+  }
+
   async writeRetry(entry: PersistedRetry): Promise<void> {
     await this.store.writeJsonAtomic(entry.issueId, "retry", entry);
   }

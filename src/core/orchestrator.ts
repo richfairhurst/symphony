@@ -17,6 +17,7 @@ import { OrchestratorPersist } from "./persist";
 import { validateStartupConfig } from "./validate";
 import { selectSshHost } from "../worker/selector";
 import { OpencodeSessionIntrospector, redactObviousSecrets } from "../opencode/sessionIntrospection";
+import { WorkspaceError } from "../workspace/errors";
 import { isRecord } from "../utils/typeGuards";
 
 function parseKeyValueLogLine(line: string): Record<string, string> {
@@ -70,6 +71,19 @@ function summarizeOpencodeStderr(line: string): { summary: string; interesting: 
   }
 
   return { summary: line.slice(0, 200), interesting: true };
+}
+
+function formatHookDispatchFailureReason(err: WorkspaceError): string | null {
+  // Workspace hooks throw WorkspaceError with messages like:
+  //   Hook failed: after_create (exit=128)
+  //   Hook timed out: after_create
+  const failed = /^Hook failed: ([^\s]+) \(exit=([^\)]+)\)$/.exec(err.message);
+  if (failed) return `hook_failed ${failed[1]!} exit=${failed[2]!}`;
+  const timed = /^Hook timed out: ([^\s]+)$/.exec(err.message);
+  if (timed) return `hook_timed_out ${timed[1]!}`;
+  if (err.code === "hook_failed") return "hook_failed";
+  if (err.code === "hook_timed_out") return "hook_timed_out";
+  return null;
 }
 
 export type OrchestratorLogger = {
@@ -416,6 +430,7 @@ export class Orchestrator {
       for (const issue of sorted) {
         if (this.stopped) break;
         if (this.state.running.has(issue.id)) continue;
+        if (this.state.retryQueue.has(issue.id)) continue;
         if (this.state.claimed.has(issue.id)) continue;
         if (!isDispatchEligible(issue, {
           activeStates: cfg.tracker.activeStates,
@@ -502,7 +517,48 @@ export class Orchestrator {
     await this.persist.writeIssueSnapshot(issue);
     await this.persist.writeAttemptStart({ issue, attempt, startedAtMs });
 
-    await this.workspaceManager.runBeforeRun(issue.identifier, host);
+    try {
+      await this.workspaceManager.runBeforeRun(issue.identifier, host);
+    } catch (err) {
+      const nowMs = this.clock.nowMs();
+      const reason =
+        err instanceof WorkspaceError && (err.code === "hook_failed" || err.code === "hook_timed_out")
+          ? (formatHookDispatchFailureReason(err) ?? "hook_failed")
+          : err instanceof Error
+            ? `dispatch_failed workspace_prepare (${err.message})`
+            : "dispatch_failed workspace_prepare";
+
+      this.logger.warn?.(`Dispatch failed for ${issue.identifier}: ${reason}`);
+
+      // Treat workspace/hook failures as per-issue dispatch failures.
+      // Release the claim so other issues can continue dispatching.
+      this.state.claimed.delete(issue.id);
+
+      const prev = this.state.retryCounts.get(issue.id) ?? 0;
+      const nextAttempt = prev + 1;
+      this.state.retryCounts.set(issue.id, nextAttempt);
+
+      const maxBackoff = this.workflowWatcher.getSnapshot().resolved.config.agent.maxRetryBackoffMs;
+      const dueAtMs = nowMs + failureDelayMs(nextAttempt, maxBackoff);
+      const r: RetryEntry = {
+        issueId: issue.id,
+        identifier: issue.identifier,
+        attempt: nextAttempt,
+        dueAtMs,
+        kind: "failure",
+        error: reason,
+      };
+      this.state.retryQueue.set(issue.id, r);
+      await this.persist.writeRetry({ active: true, ...r });
+      await this.persist.writeAttemptEndDispatchFailure({
+        issue,
+        attempt,
+        startedAtMs,
+        endedAtMs: nowMs,
+        reason,
+      });
+      return;
+    }
     const prompt = await renderPromptTemplate(this.workflowWatcher.getSnapshot().resolved.promptTemplate, {
       issue: issue as unknown as Record<string, unknown>,
       attempt,
