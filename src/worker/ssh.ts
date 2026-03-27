@@ -1,6 +1,7 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import readline from "node:readline";
 import { AsyncQueue } from "../utils/asyncQueue";
+import { extractSessionId, splitCommand } from "../runner/utils";
 import type {
   Runner,
   RunnerAbortReason,
@@ -308,53 +309,6 @@ export class SshOpencodeRunner implements Runner {
     // Build the remote command string.
     const title = `${params.issue.identifier}: ${params.issue.title}`;
 
-    const splitCommand = (command: string): string[] => {
-      const out: string[] = [];
-      let cur = "";
-      let quote: "'" | '"' | null = null;
-      let esc = false;
-      const push = () => {
-        if (cur !== "") out.push(cur);
-        cur = "";
-      };
-
-      for (const ch of command) {
-        if (esc) {
-          cur += ch;
-          esc = false;
-          continue;
-        }
-        if (quote === null) {
-          if (ch === "\\") {
-            esc = true;
-            continue;
-          }
-          if (ch === "'" || ch === '"') {
-            quote = ch;
-            continue;
-          }
-          if (ch === " " || ch === "\t" || ch === "\n") {
-            push();
-            continue;
-          }
-          cur += ch;
-          continue;
-        }
-
-        if (ch === quote) {
-          quote = null;
-          continue;
-        }
-        cur += ch;
-      }
-
-      if (esc || quote !== null) {
-        throw new Error("Invalid command: unclosed escape/quote");
-      }
-      push();
-      return out;
-    };
-
     const base = splitCommand(params.command);
     if (base.length === 0) throw new Error("opencode command is empty");
     const argv0 = base[0]!;
@@ -466,16 +420,6 @@ export class SshOpencodeRunner implements Runner {
     const onAnyOutput = (ts: number) => {
       lastEventAt = ts;
       lastReadAt = ts;
-    };
-
-    const extractSessionId = (value: unknown): string | undefined => {
-      if (value === null || typeof value !== "object") return undefined;
-      const anyObj = value as Record<string, unknown>;
-      const candidates = [anyObj.session_id, anyObj.sessionId, anyObj.run_id, anyObj.runId, anyObj.id];
-      for (const c of candidates) {
-        if (typeof c === "string" && c.trim() !== "") return c;
-      }
-      return undefined;
     };
 
     const stdoutRl = readline.createInterface({ input: child.stdout, crlfDelay: Infinity });
