@@ -37,7 +37,6 @@ const RULES: ArchRuleSet = {
   cli: { allows: ["*"], note: "Edge layer (CLI/UI); may depend on core and internals, but should not be imported by core." },
   tools: { allows: ["*"], note: "Repo-local scripts; allowed to depend on internals." },
 
-
   core: {
     allows: [
       "core",
