@@ -36,4 +36,4 @@ Implementation:
 - Work only inside the current repository.
 - Keep changes tight and directly tied to the ticket.
 - Prefer a single, persistent workpad comment for progress and handoff notes.
-- Validate before handoff: `bun test` and `bun run typecheck`.
+- Validate before handoff: `bun run arch:lint`, `bun test`, and `bun run typecheck`.
