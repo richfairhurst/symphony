@@ -21,6 +21,10 @@ export type LinearClientOptions = {
   fetch?: FetchLike;
 };
 
+export type GraphqlRequestOptions = {
+  operationName?: string;
+};
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
@@ -51,6 +55,7 @@ export class LinearClient {
   async graphqlRequest<TData, TVars extends Record<string, unknown> = Record<string, never>>(
     query: string,
     variables?: TVars,
+    opts: GraphqlRequestOptions = {},
   ): Promise<TData> {
     let res: Response;
     try {
@@ -60,7 +65,11 @@ export class LinearClient {
           Authorization: this.apiKey,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ query, variables: variables ?? {} }),
+        body: JSON.stringify({
+          query,
+          variables: variables ?? {},
+          ...(opts.operationName !== undefined ? { operationName: opts.operationName } : {}),
+        }),
       });
     } catch (err) {
       throw new LinearError("linear_api_request", "Linear request failed", { cause: err });

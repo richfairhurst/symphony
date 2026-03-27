@@ -1,9 +1,7 @@
 export {};
 
-type GraphqlEnvelope = {
-  data?: unknown;
-  errors?: unknown;
-};
+import { LinearClient } from "../linear/client";
+import { LinearError } from "../linear/errors";
 
 function usage(): string {
   return [
@@ -87,39 +85,6 @@ function ensureMarker(body: string, marker: string, identifier: string): string 
   return `${marker}\n${identifier}\n\n${trimmed}`.trimEnd() + "\n";
 }
 
-async function graphql(opts: {
-  endpoint: string;
-  apiKey: string;
-  query: string;
-  variables: Record<string, unknown>;
-}): Promise<GraphqlEnvelope> {
-  const res = await fetch(opts.endpoint, {
-    method: "POST",
-    headers: {
-      Authorization: opts.apiKey,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ query: opts.query, variables: opts.variables }),
-  });
-
-  let payload: unknown;
-  try {
-    payload = await res.json();
-  } catch {
-    throw new Error(`Linear returned non-JSON payload (HTTP ${res.status})`);
-  }
-  if (!isRecord(payload)) throw new Error("Linear returned unexpected payload");
-
-  const env: GraphqlEnvelope = payload as GraphqlEnvelope;
-  if (res.status !== 200) {
-    throw new Error(`Linear returned HTTP ${res.status}`);
-  }
-  if (Array.isArray(env.errors) && env.errors.length > 0) {
-    throw new Error("Linear returned GraphQL errors");
-  }
-  return env;
-}
-
 type IssueLookup = {
   id: string;
   identifier: string;
@@ -135,8 +100,7 @@ function parseTeamAndNumber(identifier: string): { teamKey: string; number: numb
   return { teamKey, number };
 }
 
-function parseIssueLookup(payload: GraphqlEnvelope): IssueLookup | null {
-  const data = payload.data;
+function parseIssueLookup(data: unknown): IssueLookup | null {
   if (!isRecord(data)) return null;
   const issues = data.issues;
   if (!isRecord(issues)) return null;
@@ -184,8 +148,11 @@ async function main(): Promise<number> {
   }
   const endpoint = process.env.LINEAR_ENDPOINT ?? "https://api.linear.app/graphql";
 
-  let workpad = await readFileUtf8(parsed.filePath);
-  workpad = ensureMarker(workpad, parsed.marker, parsed.identifier);
+  try {
+    let workpad = await readFileUtf8(parsed.filePath);
+    workpad = ensureMarker(workpad, parsed.marker, parsed.identifier);
+
+    const client = new LinearClient({ endpoint, apiKey });
 
   const issueQuery = /* GraphQL */ `
     query IssueByTeamAndNumberWithComments($teamKey: String!, $number: Float!) {
@@ -211,13 +178,13 @@ async function main(): Promise<number> {
     return 2;
   }
 
-  const issueEnv = await graphql({
-    endpoint,
-    apiKey,
-    query: issueQuery,
-    variables: { teamKey: keyAndNumber.teamKey, number: keyAndNumber.number },
-  });
-  const issue = parseIssueLookup(issueEnv);
+    const issueData = await client.graphqlRequest<
+      {
+        issues?: { nodes?: unknown[] };
+      },
+      { teamKey: string; number: number }
+    >(issueQuery, { teamKey: keyAndNumber.teamKey, number: keyAndNumber.number });
+    const issue = parseIssueLookup(issueData);
   if (issue === null) {
     console.error(`Issue not found: ${parsed.identifier}`);
     return 1;
@@ -226,14 +193,15 @@ async function main(): Promise<number> {
   const existingId = chooseWorkpadCommentId(issue.comments, parsed.marker);
   const action = existingId ? "update" : "create";
 
-  if (parsed.dryRun) {
-    const out = { identifier: issue.identifier, issueId: issue.id, action, commentId: existingId ?? null };
-    process.stdout.write(`${parsed.json ? JSON.stringify(out) : `Dry run: ${action}` + (existingId ? ` ${existingId}` : "")}`
-      + "\n");
-    return 0;
-  }
+    if (parsed.dryRun) {
+      const out = { identifier: issue.identifier, issueId: issue.id, action, commentId: existingId ?? null };
+      process.stdout.write(
+        `${parsed.json ? JSON.stringify(out) : `Dry run: ${action}` + (existingId ? ` ${existingId}` : "")}` + "\n",
+      );
+      return 0;
+    }
 
-  if (existingId) {
+    if (existingId) {
     const mutation = /* GraphQL */ `
       mutation UpdateComment($id: String!, $body: String!) {
         commentUpdate(id: $id, input: { body: $body }) {
@@ -242,16 +210,23 @@ async function main(): Promise<number> {
         }
       }
     `;
-    const env = await graphql({ endpoint, apiKey, query: mutation, variables: { id: existingId, body: workpad } });
+      const data = await client.graphqlRequest<
+        {
+          commentUpdate?: unknown;
+        },
+        { id: string; body: string }
+      >(mutation, { id: existingId, body: workpad });
     if (parsed.json) {
-      process.stdout.write(`${JSON.stringify({ identifier: issue.identifier, action: "update", commentId: existingId, result: env.data ?? null })}\n`);
+        process.stdout.write(
+          `${JSON.stringify({ identifier: issue.identifier, action: "update", commentId: existingId, result: data ?? null })}\n`,
+        );
     } else {
       process.stdout.write(`Updated comment: ${existingId}\n`);
     }
     return 0;
-  }
+    }
 
-  const mutation = /* GraphQL */ `
+    const mutation = /* GraphQL */ `
     mutation CreateComment($issueId: String!, $body: String!) {
       commentCreate(input: { issueId: $issueId, body: $body }) {
         success
@@ -259,13 +234,26 @@ async function main(): Promise<number> {
       }
     }
   `;
-  const env = await graphql({ endpoint, apiKey, query: mutation, variables: { issueId: issue.id, body: workpad } });
-  if (parsed.json) {
-    process.stdout.write(`${JSON.stringify({ identifier: issue.identifier, action: "create", result: env.data ?? null })}\n`);
-  } else {
-    process.stdout.write("Created comment\n");
+    const data = await client.graphqlRequest<
+      {
+        commentCreate?: unknown;
+      },
+      { issueId: string; body: string }
+    >(mutation, { issueId: issue.id, body: workpad });
+    if (parsed.json) {
+      process.stdout.write(`${JSON.stringify({ identifier: issue.identifier, action: "create", result: data ?? null })}\n`);
+    } else {
+      process.stdout.write("Created comment\n");
+    }
+    return 0;
+  } catch (err) {
+    if (err instanceof LinearError) {
+      console.error(err.message);
+      return 1;
+    }
+    console.error(err);
+    return 1;
   }
-  return 0;
 }
 
 main()
