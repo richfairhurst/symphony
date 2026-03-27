@@ -1,13 +1,6 @@
 import { LinearError } from "./errors";
 import type { LinearIssue, LinearIssueBlockerRef } from "./model";
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
-}
-
-function asString(value: unknown): string | undefined {
-  return typeof value === "string" ? value : undefined;
-}
+import { asString, isRecord } from "../utils/typeGuards";
 
 function asNullableString(value: unknown): string | null {
   if (value === null) return null;

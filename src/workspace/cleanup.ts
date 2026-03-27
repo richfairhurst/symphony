@@ -1,5 +1,6 @@
 import type { LinearClient } from "../linear/client";
 import { FETCH_ISSUES_BY_STATES_QUERY } from "../linear/queries";
+import { asString, isRecord } from "../utils/typeGuards";
 import type { Logger, WorkspaceManagerLike } from "./manager";
 
 type IssuesByStatesPage = {
@@ -8,14 +9,6 @@ type IssuesByStatesPage = {
     pageInfo?: { hasNextPage?: unknown; endCursor?: unknown };
   };
 };
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
-}
-
-function asString(value: unknown): string | undefined {
-  return typeof value === "string" ? value : undefined;
-}
 
 export async function cleanupTerminalWorkspaces(opts: {
   linearClient: LinearClient;

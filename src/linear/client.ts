@@ -1,5 +1,6 @@
 import { LinearError } from "./errors";
 import net from "node:net";
+import { isRecord } from "../utils/typeGuards";
 
 type FetchLike = (
   input: Parameters<typeof fetch>[0],
@@ -26,10 +27,6 @@ export type LinearClientOptions = {
 export type GraphqlRequestOptions = {
   operationName?: string;
 };
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
-}
 
 function getGraphqlErrors(payload: unknown): GraphqlErrorEntry[] | undefined {
   if (!isRecord(payload)) return undefined;
