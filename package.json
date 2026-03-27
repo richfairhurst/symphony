@@ -7,6 +7,7 @@
     "orchestrator": "bun src/index.ts",
     "arch:lint": "bun src/tools/archLint.ts",
     "debug:bundle": "bun src/tools/debugBundle.ts",
+    "doc:lint": "bun scripts/doc-lint.ts",
     "taste:lint": "bun src/tools/tasteLint.ts",
     "linear-graphql": "bun src/tools/linearGraphql.ts",
     "linear-ticket": "bun src/tools/linearTicket.ts",
