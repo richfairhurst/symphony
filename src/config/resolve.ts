@@ -3,6 +3,7 @@ import path from "node:path";
 import { z } from "zod";
 import { rawWorkflowConfigSchema, type RawWorkflowConfig } from "./schema";
 import { WorkflowError } from "./errors";
+import { validateSshHost } from "../worker/sshHost";
 
 export type EffectiveWorkflowConfig = {
   tracker: {
@@ -211,7 +212,19 @@ export function resolveWorkflow(
   if (parsed.server?.port !== undefined) server.port = parsed.server.port;
 
   const worker: EffectiveWorkflowConfig["worker"] = {};
-  if (parsed.worker?.ssh_hosts !== undefined) worker.sshHosts = parsed.worker.ssh_hosts;
+  if (parsed.worker?.ssh_hosts !== undefined) {
+    for (let i = 0; i < parsed.worker.ssh_hosts.length; i++) {
+      const host = parsed.worker.ssh_hosts[i]!;
+      const res = validateSshHost(host);
+      if (!res.ok) {
+        throw new WorkflowError(
+          "workflow_parse_error",
+          `Invalid WORKFLOW.md config: worker.ssh_hosts[${i}] is invalid: ${res.error.reason} (got: ${JSON.stringify(host)})`,
+        );
+      }
+    }
+    worker.sshHosts = parsed.worker.ssh_hosts;
+  }
   if (workerMaxPerHost !== undefined) worker.maxConcurrentAgentsPerHost = workerMaxPerHost;
 
   const tracker: EffectiveWorkflowConfig["tracker"] = {
