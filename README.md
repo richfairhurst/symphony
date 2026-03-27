@@ -61,8 +61,6 @@ tracker:
   api_key: $LINEAR_API_KEY
 polling:
   interval_ms: 30000
-workspace:
-  root: ~/tmp/symphony_workspaces
 hooks:
   timeout_ms: 60000
 server:
@@ -87,6 +85,7 @@ Notes:
 - Front matter is optional; without it, the entire file is treated as the prompt template.
 - Template variables are strict; unknown variables/filters fail the run.
 - The orchestrator watches `WORKFLOW.md` and hot-reloads changes.
+- `workspace.root` defaults to `~/.symphony/workspaces` (user-private directory). Set `workspace.root` to override.
 
 ### 4) Run
 
@@ -115,7 +114,7 @@ CLI modes:
 - Select a host:
   - Local by default
   - If `worker.ssh_hosts` is configured, dispatches only to SSH hosts (no local fallback when saturated)
-- Ensure per-issue workspace exists under `workspace.root` (default under OS temp dir)
+- Ensure per-issue workspace exists under `workspace.root` (defaults to `~/.symphony/workspaces`)
 - Run workspace hooks (operator-controlled shell) and then render the prompt template
 - Spawn the configured `opencode` command and consume JSONL output to track progress/state
 - Persist state next to the workflow file in `.symphony_state/` (includes `cli.jsonl`)
@@ -133,6 +132,8 @@ Local API (enabled when `server.port` is set or `--port` is provided):
 - `WORKFLOW.md` is operator-controlled policy.
 - Liquid prompt templates are hardened: filesystem-backed template loading is disabled and `{% include %}` / `{% render %}` / `{% layout %}` are rejected.
 - Workspace hooks run via `bash -lc` by design (locally, and remotely when using SSH workers).
+- `worker.ssh_hosts` entries are validated (non-empty, no whitespace, safe character allowlist; must not start with `-`).
+- If you override `workspace.root`, ensure filesystem permissions match your trust model (workspaces may contain cloned repos and generated artifacts).
 - HTTP server binds to loopback (`127.0.0.1`) by default and has no auth; treat it as local-only.
 - If `worker.ssh_hosts` is configured, the orchestrator will not fall back to local execution when the
   SSH pool is at capacity; it queues retries until slots free up.
