@@ -30,4 +30,18 @@ describe("prompt template rendering", () => {
       renderPromptTemplate("Hi {% if %}", { issue: { title: "T" }, attempt: null }),
     ).rejects.toEqual(expect.objectContaining({ code: "template_parse_error" }));
   });
+
+  test("include/render/layout tags are disabled", async () => {
+    const input = { issue: { title: "T" }, attempt: null };
+
+    for (const tpl of [
+      "{% include 'package.json' %}",
+      "{% render 'package.json' %}",
+      "{% layout 'package.json' %}",
+    ]) {
+      await expect(renderPromptTemplate(tpl, input)).rejects.toEqual(
+        expect.objectContaining({ code: "template_parse_error" }),
+      );
+    }
+  });
 });
