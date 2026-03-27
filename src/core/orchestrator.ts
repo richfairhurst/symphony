@@ -16,7 +16,7 @@ import { createEmptyState, type OrchestratorRuntimeState, type RetryEntry, type 
 import { OrchestratorPersist } from "./persist";
 import { validateStartupConfig } from "./validate";
 import { selectSshHost } from "../worker/selector";
-import { OpencodeSessionIntrospector } from "../opencode/sessionIntrospection";
+import { OpencodeSessionIntrospector, redactObviousSecrets } from "../opencode/sessionIntrospection";
 
 function parseKeyValueLogLine(line: string): Record<string, string> {
   const out: Record<string, string> = {};
@@ -541,25 +541,29 @@ export class Orchestrator {
 
   private async trackRun(entry: RunningEntry): Promise<void> {
     const LOG_TAIL_MAX = 50;
+    const maxTurns = this.workflowWatcher.getSnapshot().resolved.config.agent.maxTurns;
+    let maxTurnsAbortIssued = false;
     try {
       for await (const ev of entry.handle.events) {
         entry.lastEventAtMs = ev.ts;
         entry.lastEventType = ev.type;
         if (ev.type === "stderr") {
           entry.activity.stderrLines += 1;
-          const s = summarizeOpencodeStderr(ev.line);
+          const redacted = redactObviousSecrets(ev.line);
+          const s = summarizeOpencodeStderr(redacted);
           entry.lastEventSummary = s.summary;
           if (s.interesting) {
             entry.activity.lastInterestingAtMs = ev.ts;
             entry.activity.lastInterestingType = ev.type;
             entry.activity.lastInterestingSummary = s.summary;
           }
-          entry.logsTail.push({ ts: ev.ts, type: "stderr", line: ev.line.slice(0, 2000) });
+          entry.logsTail.push({ ts: ev.ts, type: "stderr", line: redacted.slice(0, 2000) });
           if (entry.logsTail.length > LOG_TAIL_MAX) entry.logsTail.splice(0, entry.logsTail.length - LOG_TAIL_MAX);
         } else if (ev.type === "stdout_malformed") {
           entry.activity.stdoutMalformedLines += 1;
-          entry.lastEventSummary = ev.line.slice(0, 500);
-          entry.logsTail.push({ ts: ev.ts, type: "stdout_malformed", line: ev.line.slice(0, 2000) });
+          const redacted = redactObviousSecrets(ev.line);
+          entry.lastEventSummary = `stdout_malformed: ${redacted}`.slice(0, 200);
+          entry.logsTail.push({ ts: ev.ts, type: "stdout_malformed", line: redacted.slice(0, 2000) });
           if (entry.logsTail.length > LOG_TAIL_MAX) entry.logsTail.splice(0, entry.logsTail.length - LOG_TAIL_MAX);
         } else if (ev.type === "process_exited") {
           entry.activity.processExitedEvents += 1;
@@ -591,6 +595,15 @@ export class Orchestrator {
             entry.lastEventSummary = extracted.summary;
           }
 
+          // Enforce workflow-configured max turns based on observed opencode turn/step counters.
+          if (!maxTurnsAbortIssued && entry.turnCount > maxTurns) {
+            maxTurnsAbortIssued = true;
+            entry.stopPolicy = "release";
+            entry.lastAbortReason = "max_turns_exceeded";
+            entry.lastEventSummary = `max_turns_exceeded (${entry.turnCount}/${maxTurns})`;
+            entry.handle.abort("max_turns_exceeded");
+          }
+
           if (extracted.rateLimits !== null) {
             this.state.codexRateLimits = extracted.rateLimits;
           }
@@ -600,9 +613,6 @@ export class Orchestrator {
           } else if (extracted.tokensTotalAbsolute !== null) {
             applyTokenAbsoluteTotal(this.state, entry, extracted.tokensTotalAbsolute);
           }
-        }
-        if (ev.type === "stderr") {
-          entry.lastEventSummary = `stderr: ${ev.line}`;
         }
         if (ev.type === "process_exited" && ev.abortReason !== undefined) {
           entry.lastAbortReason = ev.abortReason;

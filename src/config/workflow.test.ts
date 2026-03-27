@@ -31,6 +31,20 @@ describe("WORKFLOW.md parsing", () => {
     expectWorkflowErrorCode(() => parseWorkflowMarkdown(md), "workflow_parse_error");
   });
 
+  test("oversized front matter raises workflow_front_matter_too_large", () => {
+    const big = "x".repeat(80 * 1024);
+    const md = ["---", `k: \"${big}\"`, "---", "hello"].join("\n");
+    expectWorkflowErrorCode(() => parseWorkflowMarkdown(md), "workflow_front_matter_too_large");
+  });
+
+  test("front matter aliases are rejected", () => {
+    const md = ["---", "a: &A {b: 1}", "c: *A", "---", "hello"].join("\n");
+    expectWorkflowErrorCode(
+      () => parseWorkflowMarkdown(md),
+      "workflow_front_matter_aliases_not_allowed",
+    );
+  });
+
   test("parses YAML front matter and markdown body", () => {
     const md = ["---", "polling:", "  interval_ms: 1000", "---", "Hi"].join("\n");
     const parsed = parseWorkflowMarkdown(md);

@@ -2,7 +2,8 @@ export type RunnerAbortReason =
   | "cancelled"
   | "timeout"
   | "stalled"
-  | "event_read_timeout";
+  | "event_read_timeout"
+  | "max_turns_exceeded";
 
 export type RunnerIssueRef = {
   id: string;

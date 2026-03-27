@@ -13,6 +13,7 @@ describe("LinearClient.graphqlRequest", () => {
     const out = await client.graphqlRequest<{ viewer: { id: string } }, { a: string }>(
       "query X($a: String!) { viewer { id } }",
       { a: "b" },
+      { operationName: "X" },
     );
 
     expect(out.viewer.id).toBe("u1");
@@ -30,6 +31,7 @@ describe("LinearClient.graphqlRequest", () => {
       expect.objectContaining({
         query: expect.any(String),
         variables: { a: "b" },
+        operationName: "X",
       }),
     );
   });
