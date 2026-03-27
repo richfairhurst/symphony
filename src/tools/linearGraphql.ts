@@ -2,6 +2,7 @@ export {};
 
 import { LinearClient } from "../linear/client";
 import { LinearError } from "../linear/errors";
+import { isRecord } from "../utils/typeGuards";
 
 type GraphqlVariables = Record<string, unknown>;
 
@@ -23,10 +24,6 @@ function usage(): string {
     "  LINEAR_API_KEY        required",
     "  LINEAR_ENDPOINT       optional (default: https://api.linear.app/graphql)",
   ].join("\n");
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
 function parseToolInput(value: unknown): GraphqlToolInput {
