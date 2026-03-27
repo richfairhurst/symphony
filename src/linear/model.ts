@@ -11,6 +11,7 @@ export type LinearIssue = {
   description: string | null;
   priority: number | null;
   state: string;
+  branch_name: string | null;
   url: string | null;
   labels: string[];
   blocked_by: LinearIssueBlockerRef[];

@@ -36,6 +36,7 @@ const RULES: ArchRuleSet = {
   api: { allows: ["*"], note: "Edge layer (HTTP API); may depend on core and internals, but should not be imported by core." },
   cli: { allows: ["*"], note: "Edge layer (CLI/UI); may depend on core and internals, but should not be imported by core." },
   tools: { allows: ["*"], note: "Repo-local scripts; allowed to depend on internals." },
+  taste: { allows: ["taste", "utils"], note: "House style lint rules; keep it leaf-ish." },
 
   core: {
     allows: [
@@ -75,10 +76,6 @@ const RULES: ArchRuleSet = {
   opencode: {
     allows: ["opencode", "utils"],
     note: "Opencode protocol helpers; keep it leaf-ish.",
-  },
-  taste: {
-    allows: ["taste", "utils"],
-    note: "Repo taste lints; keep it leaf-ish.",
   },
   runner: {
     allows: ["runner", "utils"],

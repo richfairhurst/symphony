@@ -100,6 +100,7 @@ export function normalizeLinearIssue(raw: unknown): LinearIssue {
     state,
     description: asNullableString(raw.description),
     priority: asNullableInt(raw.priority),
+    branch_name: asNullableString(raw["branchName"]),
     url: asNullableString(raw.url),
     labels: getLabelNamesLower(raw),
     blocked_by: getBlockedBy(raw),
