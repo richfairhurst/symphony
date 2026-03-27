@@ -405,9 +405,12 @@ export function renderVisualScreen(opts: {
   if (running.length === 0) {
     lines.push(boxLine(width, dim("n/a")));
   } else {
-    const focus = running[0]!;
+    const rotateMs = 5_000;
+    const focusIndex = running.length <= 1 ? 0 : Math.floor(nowMs / rotateMs) % running.length;
+    const focus = running[focusIndex]!;
     const ses = focus.opencodeSession ?? null;
-    const header = `${bold(focus.issue.identifier)}  ${dim("host")}: ${focus.host}`;
+    const pos = running.length <= 1 ? "" : ` (${focusIndex + 1}/${running.length})`;
+    const header = `${bold(focus.issue.identifier)}  ${dim("host")}: ${focus.host}${pos}`;
     lines.push(boxLine(width, header));
     if (!ses) {
       lines.push(boxLine(width, dim("n/a (db missing/unavailable, or no matching session)")));
