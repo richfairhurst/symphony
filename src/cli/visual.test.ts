@@ -171,19 +171,18 @@ describe("visual CLI", () => {
           workflowPath: "/tmp/WORKFLOW.md",
         }),
       );
-      const lines = out.split("\n");
-      const idx = lines.findIndex((l) => l.includes("OPENCODE SESSION"));
-      return idx >= 0 ? (lines[idx + 1] ?? "") : "";
+      return out;
     };
 
-    expect(renderHeaderLine(10_000)).toContain("RIC-25");
-    expect(renderHeaderLine(10_000)).toContain("(1/2)");
-
-    expect(renderHeaderLine(15_000)).toContain("RIC-26");
-    expect(renderHeaderLine(15_000)).toContain("(2/2)");
+    const out = renderHeaderLine(10_000);
+    expect(out).not.toContain("OPENCODE SESSION");
+    expect(out).toContain("RIC-25");
+    expect(out).toContain("tail-RIC-25");
+    expect(out).toContain("RIC-26");
+    expect(out).toContain("tail-RIC-26");
   });
 
-  test("does not show rotation position for a single agent", () => {
+  test("shows inline opencode session tail for a single agent", () => {
     const state = createEmptyState();
     state.running.set("1", {
       issue: {
@@ -212,6 +211,21 @@ describe("visual CLI", () => {
         stdoutMalformedLines: 0,
         processExitedEvents: 0,
       },
+      lastEventSummary: "step_start",
+      opencodeSession: {
+        id: "ses_RIC-1",
+        updated_at: "2026-03-25T20:00:00.000Z",
+        summary: "ok",
+        tail: [
+          {
+            ts: "2026-03-25T20:00:00.000Z",
+            type: "reasoning",
+            tool: null,
+            status: null,
+            text: "tail-RIC-1",
+          },
+        ],
+      },
       turnCount: 0,
       stopPolicy: "keep",
     });
@@ -228,10 +242,8 @@ describe("visual CLI", () => {
     );
 
     expect(out).not.toContain("OPENCODE SESSION");
-    expect(out).toContain("RIC-25");
-    expect(out).toContain("tail-RIC-25");
-    expect(out).toContain("RIC-26");
-    expect(out).toContain("tail-RIC-26");
+    expect(out).toContain("RIC-1");
+    expect(out).toContain("tail-RIC-1");
   });
 
   test("restores cursor on stop", () => {
