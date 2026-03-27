@@ -185,6 +185,22 @@ describe("api server", () => {
       expect(body.workspace.host).toBe("local");
       expect(body.workspace.path).toContain(path.join(dir, "ws"));
       expect(body.tracked.issue_snapshot.identifier).toBe("A-1");
+      expect(body.tracked.last_attempt).toBe(null);
+    }
+
+    {
+      await store.writeJsonAtomic("i1", "last_attempt", {
+        issueId: "i1",
+        identifier: "A-1",
+        attempt: 1,
+        startedAtMs: 0,
+        endedAtMs: 1,
+        abortReason: "max_turns_exceeded",
+      });
+      const res = await fetch(`${base}/api/v1/issues/A-1`);
+      expect(res.status).toBe(200);
+      const body = await readJson(res);
+      expect(body.tracked.last_attempt.abortReason).toBe("max_turns_exceeded");
     }
 
     {
