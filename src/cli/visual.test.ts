@@ -102,11 +102,12 @@ describe("visual CLI", () => {
     expect(out).toContain("SYMPHONY STATUS");
     expect(out).toContain("RUNNING AGENTS");
     expect(out).toContain("RIC-6");
+    expect(out).not.toContain("OPENCODE SESSION");
     expect(out).toContain("BACKOFF QUEUE");
     expect(out).toContain("RIC-7");
   });
 
-  test("auto-rotates OPENCODE SESSION focus when multiple agents run", () => {
+  test("inlines per-agent opencode session tail into Event column", () => {
     const state = createEmptyState();
 
     const mkRunning = (identifier: string) => ({
@@ -135,67 +136,27 @@ describe("visual CLI", () => {
         stdoutMalformedLines: 0,
         processExitedEvents: 0,
       },
+      lastEventSummary: "step_start",
+      opencodeSession: {
+        id: `ses_${identifier}`,
+        updated_at: "2026-03-25T20:00:00.000Z",
+        summary: "ok",
+        tail: [
+          {
+            ts: "2026-03-25T20:00:00.000Z",
+            type: "reasoning",
+            tool: null,
+            status: null,
+            text: `tail-${identifier}`,
+          },
+        ],
+      },
       turnCount: 0,
       stopPolicy: "keep" as const,
     });
 
     state.running.set("1", mkRunning("RIC-26"));
     state.running.set("2", mkRunning("RIC-25"));
-
-    const renderHeaderLine = (nowMs: number): string => {
-      const out = stripAnsi(
-        renderVisualScreen({
-          nowMs,
-          frame: 0,
-          state,
-          logs: [],
-          width: 100,
-          workflowPath: "/tmp/WORKFLOW.md",
-        }),
-      );
-      const lines = out.split("\n");
-      const idx = lines.findIndex((l) => l.includes("OPENCODE SESSION"));
-      return idx >= 0 ? (lines[idx + 1] ?? "") : "";
-    };
-
-    expect(renderHeaderLine(10_000)).toContain("RIC-25");
-    expect(renderHeaderLine(10_000)).toContain("(1/2)");
-
-    expect(renderHeaderLine(15_000)).toContain("RIC-26");
-    expect(renderHeaderLine(15_000)).toContain("(2/2)");
-  });
-
-  test("does not show rotation position for a single agent", () => {
-    const state = createEmptyState();
-    state.running.set("1", {
-      issue: {
-        id: "1",
-        identifier: "RIC-1",
-        title: "t",
-        description: null,
-        priority: null,
-        state: "In Progress",
-        url: null,
-        labels: [],
-        blocked_by: [],
-        created_at: null,
-        updated_at: null,
-      },
-      attempt: 1,
-      host: "local",
-      handle: makeHandle(),
-      startedAtMs: 0,
-      lastEventAtMs: 0,
-      logsTail: [],
-      activity: {
-        stderrLines: 0,
-        stdoutJsonEvents: 0,
-        stdoutMalformedLines: 0,
-        processExitedEvents: 0,
-      },
-      turnCount: 0,
-      stopPolicy: "keep",
-    });
 
     const out = stripAnsi(
       renderVisualScreen({
@@ -207,10 +168,12 @@ describe("visual CLI", () => {
         workflowPath: "/tmp/WORKFLOW.md",
       }),
     );
-    const lines = out.split("\n");
-    const idx = lines.findIndex((l) => l.includes("OPENCODE SESSION"));
-    const header = idx >= 0 ? (lines[idx + 1] ?? "") : "";
-    expect(header).not.toContain("(1/1)");
+
+    expect(out).not.toContain("OPENCODE SESSION");
+    expect(out).toContain("RIC-25");
+    expect(out).toContain("tail-RIC-25");
+    expect(out).toContain("RIC-26");
+    expect(out).toContain("tail-RIC-26");
   });
 
   test("restores cursor on stop", () => {
@@ -269,6 +232,20 @@ describe("visual CLI", () => {
       turnCount: 999,
       lastSessionId: "sess_abcdefghijklmnopqrstuvwxyz0123456789",
       lastEventSummary: "a very long event summary that should be truncated to fit the terminal width",
+      opencodeSession: {
+        id: "ses_1",
+        updated_at: "2026-03-25T20:00:00.000Z",
+        summary: "ok",
+        tail: [
+          {
+            ts: "2026-03-25T20:00:00.000Z",
+            type: "reasoning",
+            tool: null,
+            status: null,
+            text: "a very long opencode tail line that should also be truncated to fit the terminal width",
+          },
+        ],
+      },
       tokenTotal: 123456,
       stopPolicy: "keep",
     });

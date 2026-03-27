@@ -226,6 +226,28 @@ function formatPid(pid: number | undefined): string {
   return Number.isFinite(pid) ? String(pid) : "-";
 }
 
+function formatOpencodeTailLine(e: {
+  ts: string;
+  type: string | null;
+  tool: string | null;
+  status: string | null;
+  text: string | null;
+}): string {
+  const ts = formatClock(e.ts);
+  const type = e.type ?? "-";
+  const tool = e.tool ?? "-";
+  const status = colorToolStatus(e.status);
+  const text = (e.text ?? "").trim();
+  const oneLine = text === "" ? "" : truncateEnd(text.replace(/\s+/g, " "), 160);
+  return `${dim(ts)}  ${bold(type)}  ${tool} ${status}${oneLine ? `  ${dim(oneLine)}` : ""}`;
+}
+
+function chooseEventFeedLines(width: number): number {
+  if (width < 80) return 3;
+  if (width < 110) return 4;
+  return 6;
+}
+
 type TableCol = {
   key: string;
   title: string;
@@ -242,8 +264,8 @@ function chooseColumns(total: number): TableCol[] {
     { key: "pid", title: "PID", min: 3, ideal: 5, dropPriority: 5, align: "right" },
     { key: "ageTurn", title: "Age/Turn", min: 7, ideal: 9, dropPriority: 1, align: "left" },
     { key: "tokens", title: "Tokens", min: 4, ideal: 7, dropPriority: 4, align: "right" },
-    { key: "session", title: "Session", min: 6, ideal: 10, dropPriority: 6, align: "left" },
-    { key: "event", title: "Event", min: 10, ideal: 24, dropPriority: 3, align: "left" },
+    { key: "session", title: "Session", min: 6, ideal: 8, dropPriority: 6, align: "left" },
+    { key: "event", title: "Event", min: 10, ideal: 34, dropPriority: 3, align: "left" },
   ];
 
   const minWithSpaces = (cols: TableCol[]) => cols.reduce((sum, c) => sum + c.min, 0) + Math.max(0, cols.length - 1);
@@ -376,6 +398,7 @@ export function renderVisualScreen(opts: {
     lines.push(boxLine(width, dim("No running agents")));
   } else {
     const maxRows = 12;
+    const maxFeed = chooseEventFeedLines(width);
     for (const r of running.slice(0, maxRows)) {
       const elapsed = formatDuration(nowMs - r.startedAtMs);
       const ageTurn = `${elapsed}/${r.turnCount}`;
@@ -384,57 +407,32 @@ export function renderVisualScreen(opts: {
       const event = r.lastEventSummary ?? "-";
       const stage = colorStage(r.issue.state);
 
-      const row = renderRow(cols, {
+      const ses = r.opencodeSession ?? null;
+      const tail = ses?.tail?.length ? ses.tail.slice(Math.max(0, ses.tail.length - maxFeed)) : [];
+      const feedLines = tail.map(formatOpencodeTailLine);
+
+      const eventLines = feedLines.length > 0 ? [event, ...feedLines] : [event];
+
+      const firstRow = renderRow(cols, {
         id: r.issue.identifier,
         stage,
         pid: formatPid(r.pid),
         ageTurn,
         tokens,
         session,
-        event,
+        event: eventLines[0] ?? "-",
       });
-      lines.push(boxLine(width, row));
+      lines.push(boxLine(width, firstRow));
+
+      for (const line of eventLines.slice(1)) {
+        const cont = renderRow(cols, {
+          event: line,
+        });
+        lines.push(boxLine(width, cont));
+      }
     }
     if (running.length > maxRows) {
       lines.push(boxLine(width, dim(`(+${running.length - maxRows} more)`)));
-    }
-  }
-
-  lines.push(boxRule(width));
-  lines.push(boxLine(width, bold("OPENCODE SESSION")));
-  if (running.length === 0) {
-    lines.push(boxLine(width, dim("n/a")));
-  } else {
-    const rotateMs = 5_000;
-    const focusIndex = running.length <= 1 ? 0 : Math.floor(nowMs / rotateMs) % running.length;
-    const focus = running[focusIndex]!;
-    const ses = focus.opencodeSession ?? null;
-    const pos = running.length <= 1 ? "" : ` (${focusIndex + 1}/${running.length})`;
-    const header = `${bold(focus.issue.identifier)}  ${dim("host")}: ${focus.host}${pos}`;
-    lines.push(boxLine(width, header));
-    if (!ses) {
-      lines.push(boxLine(width, dim("n/a (db missing/unavailable, or no matching session)")));
-    } else {
-      const summary = `${dim("summary")}: ${bold(ses.summary)}`;
-      const sid = `${dim("id")}: ${truncateEnd(ses.id, 40)}  ${dim("updated")}: ${formatClock(ses.updated_at)}`;
-      lines.push(boxLine(width, summary));
-      lines.push(boxLine(width, sid));
-
-      const maxTail = width < 80 ? 4 : width < 110 ? 6 : 10;
-      const tail = ses.tail.slice(Math.max(0, ses.tail.length - maxTail));
-      if (tail.length === 0) {
-        lines.push(boxLine(width, dim("(no parts)")));
-      } else {
-        for (const e of tail) {
-          const ts = formatClock(e.ts);
-          const type = e.type ?? "-";
-          const tool = e.tool ?? "-";
-          const status = colorToolStatus(e.status);
-          const text = e.text ? truncateEnd(e.text, 80) : "";
-          const line = `${dim(ts)}  ${bold(type)}  ${tool} ${status}${text ? `  ${dim(text)}` : ""}`;
-          lines.push(boxLine(width, line));
-        }
-      }
     }
   }
 
