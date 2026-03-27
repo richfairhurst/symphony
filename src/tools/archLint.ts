@@ -77,10 +77,6 @@ const RULES: ArchRuleSet = {
     allows: ["opencode", "utils"],
     note: "Opencode protocol helpers; keep it leaf-ish.",
   },
-  taste: {
-    allows: ["taste", "utils"],
-    note: "Repo taste lints; keep it leaf-ish.",
-  },
   runner: {
     allows: ["runner", "utils"],
     note: "Runner interface/impls; avoid importing core/scheduler/workspace.",

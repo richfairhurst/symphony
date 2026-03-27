@@ -117,7 +117,7 @@ describe("api server", () => {
       state.tokenOutputTotal = 5;
       state.tokenTotal = 15;
       state.running.set("i2", {
-        issue: { id: "i2", identifier: "B-1", title: "B-1", description: null, priority: null, state: "Todo", url: null, labels: [], blocked_by: [], created_at: null, updated_at: null },
+        issue: { id: "i2", identifier: "B-1", title: "B-1", description: null, priority: null, state: "Todo", branch_name: null, url: null, labels: [], blocked_by: [], created_at: null, updated_at: null },
         attempt: null,
         host: "local",
         handle: new FakeRunner([{ kind: "hang" }]).startRun({
@@ -277,6 +277,7 @@ describe("api server", () => {
       description: null,
       priority: null,
       state: "In Progress",
+      branch_name: null,
       url: null,
       labels: [],
       blocked_by: [],
