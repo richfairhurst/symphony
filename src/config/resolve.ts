@@ -1,5 +1,6 @@
 import os from "node:os";
 import path from "node:path";
+import net from "node:net";
 import { z } from "zod";
 import { rawWorkflowConfigSchema, type RawWorkflowConfig } from "./schema";
 import { WorkflowError } from "./errors";
@@ -8,6 +9,7 @@ export type EffectiveWorkflowConfig = {
   tracker: {
     kind?: string;
     endpoint: string;
+    allowUnsafeEndpoint: boolean;
     apiKey?: string;
     projectSlug?: string;
     activeStates: string[];
@@ -68,6 +70,84 @@ const DEFAULTS = {
   opencodeStallTimeoutMs: 300_000,
   promptFallback: "You are working on an issue from Linear.",
 } as const;
+
+function normalizeTrackerEndpoint(raw: string, opts: { allowUnsafe: boolean }): string {
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    throw new WorkflowError(
+      "workflow_invalid_tracker_endpoint",
+      `Invalid tracker.endpoint: must be a valid URL (got ${JSON.stringify(raw)})`,
+    );
+  }
+
+  if (url.username !== "" || url.password !== "") {
+    throw new WorkflowError(
+      "workflow_invalid_tracker_endpoint",
+      "Invalid tracker.endpoint: credentials in URL are not allowed",
+    );
+  }
+
+  if (url.protocol !== "https:") {
+    throw new WorkflowError(
+      "workflow_invalid_tracker_endpoint",
+      "Invalid tracker.endpoint: must use https",
+    );
+  }
+
+  const host = url.hostname.toLowerCase();
+  const ipKind = net.isIP(host);
+
+  const isLocalHostName = host === "localhost" || host.endsWith(".localhost") || host.endsWith(".local");
+  const isLoopbackIp = host === "127.0.0.1" || host === "::1";
+
+  const isPrivateIp = (() => {
+    if (ipKind === 4) {
+      const parts = host.split(".").map((p) => Number.parseInt(p, 10));
+      if (parts.length !== 4 || parts.some((n) => !Number.isFinite(n) || n < 0 || n > 255)) return true;
+      const [a, b] = parts;
+      if (a === 10) return true;
+      if (a === 127) return true;
+      if (a === 0) return true;
+      if (a === 169 && b === 254) return true;
+      if (a === 172 && b !== undefined && b >= 16 && b <= 31) return true;
+      if (a === 192 && b === 168) return true;
+      if (a === 100 && b !== undefined && b >= 64 && b <= 127) return true;
+      return false;
+    }
+    if (ipKind === 6) {
+      const h = host.toLowerCase();
+      if (h === "::" || h === "::1") return true;
+      if (h.startsWith("fe80:")) return true; // link-local
+      if (h.startsWith("fc") || h.startsWith("fd")) return true; // unique local (fc00::/7)
+      return false;
+    }
+    return false;
+  })();
+
+  if (opts.allowUnsafe) {
+    if (isLocalHostName || isLoopbackIp || isPrivateIp) {
+      throw new WorkflowError(
+        "workflow_invalid_tracker_endpoint",
+        "Invalid tracker.endpoint: custom endpoints must not target localhost or private IP ranges",
+      );
+    }
+  } else {
+    const pathOk = url.pathname === "/graphql" || url.pathname === "/graphql/";
+    const hostOk = host === "api.linear.app";
+    if (!hostOk || !pathOk) {
+      throw new WorkflowError(
+        "workflow_invalid_tracker_endpoint",
+        "Invalid tracker.endpoint: only https://api.linear.app/graphql is allowed by default. To use a custom HTTPS endpoint, set tracker.allow_unsafe_endpoint: true (localhost/private IPs are still blocked).",
+      );
+    }
+  }
+
+  // normalize trailing slash for stability
+  if (url.pathname === "/graphql/") url.pathname = "/graphql";
+  return url.toString();
+}
 
 function expandEnvToken(value: string, env: NodeJS.ProcessEnv): string | undefined {
   if (!value.startsWith("$")) return value;
@@ -173,11 +253,13 @@ export function resolveWorkflow(
     trackerApiKeyToken === undefined ? undefined : expandEnvToken(trackerApiKeyToken, env);
 
   const trackerKind = parsed.tracker?.kind;
-  const endpoint =
+  const allowUnsafeEndpoint = parsed.tracker?.allow_unsafe_endpoint === true;
+  const rawEndpoint =
     parsed.tracker?.endpoint ??
     (trackerKind?.toLowerCase() === "linear"
       ? DEFAULTS.trackerEndpointLinear
       : DEFAULTS.trackerEndpointLinear);
+  const endpoint = normalizeTrackerEndpoint(rawEndpoint, { allowUnsafe: allowUnsafeEndpoint });
 
   const prompt = promptTemplate.trim() === "" ? DEFAULTS.promptFallback : promptTemplate.trim();
 
@@ -216,6 +298,7 @@ export function resolveWorkflow(
 
   const tracker: EffectiveWorkflowConfig["tracker"] = {
     endpoint,
+    allowUnsafeEndpoint,
     activeStates: parsed.tracker?.active_states ?? [...DEFAULTS.trackerActiveStates],
     terminalStates: parsed.tracker?.terminal_states ?? [...DEFAULTS.trackerTerminalStates],
   };

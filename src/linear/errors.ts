@@ -2,6 +2,7 @@ export type LinearErrorCode =
   | "linear_api_request"
   | "linear_api_status"
   | "linear_graphql_errors"
+  | "linear_unsafe_endpoint"
   | "linear_unknown_payload";
 
 export class LinearError extends Error {
