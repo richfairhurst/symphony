@@ -541,6 +541,8 @@ export class Orchestrator {
 
   private async trackRun(entry: RunningEntry): Promise<void> {
     const LOG_TAIL_MAX = 50;
+    const maxTurns = this.workflowWatcher.getSnapshot().resolved.config.agent.maxTurns;
+    let maxTurnsAbortIssued = false;
     try {
       for await (const ev of entry.handle.events) {
         entry.lastEventAtMs = ev.ts;
@@ -589,6 +591,15 @@ export class Orchestrator {
           }
           if (extracted.summary !== undefined) {
             entry.lastEventSummary = extracted.summary;
+          }
+
+          // Enforce workflow-configured max turns based on observed opencode turn/step counters.
+          if (!maxTurnsAbortIssued && entry.turnCount > maxTurns) {
+            maxTurnsAbortIssued = true;
+            entry.stopPolicy = "release";
+            entry.lastAbortReason = "max_turns_exceeded";
+            entry.lastEventSummary = `max_turns_exceeded (${entry.turnCount}/${maxTurns})`;
+            entry.handle.abort("max_turns_exceeded");
           }
 
           if (extracted.rateLimits !== null) {

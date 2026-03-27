@@ -24,12 +24,15 @@ function safeParseInt(s: string | undefined): number | undefined {
 async function findIssueByIdentifier(
   stateStore: FilesystemStateStore,
   identifier: string,
-): Promise<{ issueId: string; issue: any } | null> {
+): Promise<{ issueId: string; issue: any; lastAttempt: any | null } | null> {
   const keys = await stateStore.listIssueKeys();
   for (const k of keys) {
     const snap = await stateStore.readJson<any>(k, "issue_snapshot");
     if (!snap || typeof snap !== "object") continue;
-    if (snap.identifier === identifier) return { issueId: k, issue: snap };
+    if (snap.identifier === identifier) {
+      const lastAttempt = (await stateStore.readJson<any>(k, "last_attempt")) ?? null;
+      return { issueId: k, issue: snap, lastAttempt };
+    }
   }
   return null;
 }
@@ -76,6 +79,7 @@ export function startApiServer(opts: ApiServerOptions): ApiServerHandle {
       host: e.host,
       session_id: e.lastSessionId ?? null,
       turn_count: e.turnCount,
+      abort_reason: e.lastAbortReason ?? null,
       tokens: {
         input_tokens: e.tokenInput ?? null,
         output_tokens: e.tokenOutput ?? null,
@@ -168,6 +172,7 @@ export function startApiServer(opts: ApiServerOptions): ApiServerHandle {
                 session_id: running.lastSessionId ?? null,
                 opencode_session: running.opencodeSession ?? null,
                 turn_count: running.turnCount,
+                abort_reason: running.lastAbortReason ?? null,
                 state: running.issue.state,
                 tokens: {
                   input_tokens: running.tokenInput ?? null,
@@ -207,6 +212,7 @@ export function startApiServer(opts: ApiServerOptions): ApiServerHandle {
               },
         tracked: {
           issue_snapshot: persisted?.issue ?? null,
+          last_attempt: persisted?.lastAttempt ?? null,
         },
       },
       { status: 200 },
