@@ -60,7 +60,7 @@ const DEFAULTS = {
   trackerActiveStates: ["Todo", "In Progress"],
   trackerTerminalStates: ["Closed", "Cancelled", "Canceled", "Duplicate", "Done"],
   pollingIntervalMs: 30_000,
-  workspaceRoot: path.join(os.tmpdir(), "symphony_workspaces"),
+  workspaceRoot: path.join(os.homedir(), ".symphony", "workspaces"),
   hooksTimeoutMs: 60_000,
   agentMaxConcurrentAgents: 10,
   agentMaxTurns: 20,

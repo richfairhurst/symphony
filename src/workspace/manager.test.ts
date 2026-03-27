@@ -109,4 +109,25 @@ describe("workspace manager", () => {
       await fs.rm(root, { recursive: true, force: true });
     }
   });
+
+  test("rejects symlinked workspace directories", async () => {
+    const root = await makeTempDir("symphony-ws-");
+    try {
+      const mgr = new WorkspaceManager({
+        workspaceRoot: root,
+        hooks: {
+          timeoutMs: 5_000,
+        },
+      });
+
+      const { workspacePath } = mgr.getWorkspaceInfo("ABC-6");
+      await fs.symlink("/", workspacePath);
+
+      await expect(mgr.ensureWorkspace("ABC-6")).rejects.toEqual(
+        expect.objectContaining({ code: "workspace_path_is_symlink" }),
+      );
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
 });
