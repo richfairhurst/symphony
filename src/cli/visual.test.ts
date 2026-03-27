@@ -177,9 +177,10 @@ describe("visual CLI", () => {
     const out = renderHeaderLine(10_000);
     expect(out).not.toContain("OPENCODE SESSION");
     expect(out).toContain("RIC-25");
-    expect(out).toContain("tail-RIC-25");
+    expect(out).toContain("reasoning");
+    expect(out).toContain("tail");
     expect(out).toContain("RIC-26");
-    expect(out).toContain("tail-RIC-26");
+    expect(out).toContain("tail");
   });
 
   test("shows inline opencode session tail for a single agent", () => {
@@ -243,7 +244,8 @@ describe("visual CLI", () => {
 
     expect(out).not.toContain("OPENCODE SESSION");
     expect(out).toContain("RIC-1");
-    expect(out).toContain("tail-RIC-1");
+    expect(out).toContain("reasoning");
+    expect(out).toContain("tail");
   });
 
   test("restores cursor on stop", () => {
@@ -266,6 +268,111 @@ describe("visual CLI", () => {
 
     expect(out).toContain("\x1b[?25l");
     expect(out).toContain("\x1b[?25h");
+  });
+
+  test("formats Session values with middle truncation on wide terminals", () => {
+    const state = createEmptyState();
+    const nowMs = 1_700_000_000_000;
+
+    state.running.set("1", {
+      issue: {
+        id: "1",
+        identifier: "RIC-37",
+        title: "t",
+        description: null,
+        priority: null,
+        state: "In Progress",
+        branch_name: null,
+        url: null,
+        labels: [],
+        blocked_by: [],
+        created_at: null,
+        updated_at: null,
+      },
+      attempt: 1,
+      host: "local",
+      handle: makeHandle(),
+      startedAtMs: nowMs - 65_000,
+      lastEventAtMs: nowMs - 2_000,
+      logsTail: [],
+      activity: {
+        stderrLines: 0,
+        stdoutJsonEvents: 0,
+        stdoutMalformedLines: 0,
+        processExitedEvents: 0,
+      },
+      turnCount: 3,
+      lastSessionId: "ses_2d19abcdef0123456789xyz49yk1g",
+      lastEventSummary: "step_start",
+      stopPolicy: "keep",
+    });
+
+    const out = stripAnsi(
+      renderVisualScreen({
+        nowMs,
+        frame: 0,
+        state,
+        logs: [],
+        width: 140,
+        workflowPath: "/tmp/WORKFLOW.md",
+      }),
+    );
+
+    expect(out).toContain("ses_2d...9yk1g");
+    expect(out).toMatchSnapshot();
+  });
+
+  test("drops Session column on narrow terminals", () => {
+    const state = createEmptyState();
+    const nowMs = 1_700_000_000_000;
+
+    state.running.set("1", {
+      issue: {
+        id: "1",
+        identifier: "RIC-37",
+        title: "t",
+        description: null,
+        priority: null,
+        state: "In Progress",
+        branch_name: null,
+        url: null,
+        labels: [],
+        blocked_by: [],
+        created_at: null,
+        updated_at: null,
+      },
+      attempt: 1,
+      host: "local",
+      handle: makeHandle(),
+      startedAtMs: nowMs - 65_000,
+      lastEventAtMs: nowMs - 2_000,
+      logsTail: [],
+      activity: {
+        stderrLines: 0,
+        stdoutJsonEvents: 0,
+        stdoutMalformedLines: 0,
+        processExitedEvents: 0,
+      },
+      turnCount: 3,
+      lastSessionId: "ses_2d19abcdef0123456789xyz49yk1g",
+      lastEventSummary: "step_start",
+      stopPolicy: "keep",
+    });
+
+    const out = stripAnsi(
+      renderVisualScreen({
+        nowMs,
+        frame: 0,
+        state,
+        logs: [],
+        width: 40,
+        workflowPath: "/tmp/WORKFLOW.md",
+      }),
+    );
+
+    expect(out).toContain("RUNNING AGENTS");
+    expect(out).not.toContain("Sess");
+    expect(out).toContain("RIC-37");
   });
 
   test("never exceeds the configured width", () => {

@@ -97,6 +97,17 @@ function truncateEnd(s: string, max: number): string {
   return `${s.slice(0, max - 3)}...`;
 }
 
+function truncateMiddle(s: string, max: number): string {
+  if (max <= 0) return "";
+  if (s.length <= max) return s;
+  if (max <= 3) return s.slice(0, max);
+
+  const keep = max - 3;
+  const left = Math.max(1, Math.ceil(keep / 2));
+  const right = Math.max(1, Math.floor(keep / 2));
+  return `${s.slice(0, left)}...${s.slice(Math.max(left, s.length - right))}`;
+}
+
 function spinner(frame: number): string {
   const frames = ["-", "\\", "|", "/"] as const;
   return frames[frame % frames.length]!;
@@ -264,7 +275,7 @@ function chooseColumns(total: number): TableCol[] {
     { key: "pid", title: "PID", min: 3, ideal: 5, dropPriority: 5, align: "right" },
     { key: "ageTurn", title: "Age/Turn", min: 7, ideal: 9, dropPriority: 1, align: "left" },
     { key: "tokens", title: "Tokens", min: 4, ideal: 7, dropPriority: 4, align: "right" },
-    { key: "session", title: "Session", min: 6, ideal: 8, dropPriority: 6, align: "left" },
+    { key: "session", title: "Sess", min: 12, ideal: 14, dropPriority: 6, align: "left" },
     { key: "event", title: "Event", min: 10, ideal: 34, dropPriority: 3, align: "left" },
   ];
 
@@ -314,7 +325,7 @@ function renderRow(cols: Array<TableCol & { width: number }>, values: Record<str
   const parts: string[] = [];
   for (const c of cols) {
     const raw = values[c.key] ?? "";
-    const v = truncateEndAnsi(raw, c.width);
+    const v = c.key === "session" ? truncateMiddle(raw, c.width) : truncateEndAnsi(raw, c.width);
     if (c.align === "right") parts.push(padStartAnsi(v, c.width));
     else parts.push(padEndAnsi(v, c.width));
   }
