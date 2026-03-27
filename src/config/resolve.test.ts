@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import os from "node:os";
 import path from "node:path";
 import { resolveWorkflow } from "./resolve";
 
@@ -44,6 +45,11 @@ describe("workflow config resolution", () => {
   test("workspace.root preserves bare relative names", () => {
     const resolved = resolveWorkflow({ workspace: { root: "workspaces" } }, "Hello", {});
     expect(resolved.config.workspace.root).toBe("workspaces");
+  });
+
+  test("workspace.root defaults to user-private directory", () => {
+    const resolved = resolveWorkflow({}, "Hello", {});
+    expect(resolved.config.workspace.root).toBe(path.join(os.homedir(), ".symphony", "workspaces"));
   });
 
   test("workspace.root resolves path separators", () => {

@@ -1,7 +1,7 @@
 import { promises as fs } from "node:fs";
 import { WorkspaceError } from "./errors";
 import { runHookScript, throwOnHookFailure } from "./hooks";
-import { getWorkspacePath } from "./paths";
+import { getWorkspacePath, isPathInsideRoot } from "./paths";
 
 export type WorkspaceHooks = {
   afterCreate?: string;
@@ -58,9 +58,18 @@ export class WorkspaceManager {
   }> {
     const info = this.getWorkspaceInfo(issueIdentifier, host);
 
+    // Ensure root exists before realpath checks.
+    await fs.mkdir(info.rootPath, { recursive: true });
+
     let existed = false;
     try {
-      const st = await fs.stat(info.workspacePath);
+      const st = await fs.lstat(info.workspacePath);
+      if (st.isSymbolicLink()) {
+        throw new WorkspaceError(
+          "workspace_path_is_symlink",
+          `Workspace path is a symlink and is not allowed: ${info.workspacePath}`,
+        );
+      }
       if (!st.isDirectory()) {
         throw new WorkspaceError(
           "workspace_path_exists_not_dir",
@@ -80,17 +89,26 @@ export class WorkspaceManager {
       await fs.mkdir(info.workspacePath, { recursive: true });
     }
 
+    const rootReal = await fs.realpath(info.rootPath);
+    const workspaceReal = await fs.realpath(info.workspacePath);
+    if (!isPathInsideRoot(rootReal, workspaceReal)) {
+      throw new WorkspaceError(
+        "workspace_path_outside_root",
+        `Workspace realpath escapes root: root=${rootReal} path=${workspaceReal}`,
+      );
+    }
+
     const createdNow = !existed;
     if (createdNow && this.hooks.afterCreate !== undefined) {
       const res = await runHookScript(this.hooks.afterCreate, {
-        cwd: info.workspacePath,
+        cwd: workspaceReal,
         timeoutMs: this.hooks.timeoutMs,
       });
       try {
         throwOnHookFailure("after_create", res);
       } catch (err) {
         try {
-          await fs.rm(info.workspacePath, { recursive: true, force: true });
+          await fs.rm(workspaceReal, { recursive: true, force: true });
         } catch {
           // ignore
         }
@@ -98,7 +116,7 @@ export class WorkspaceManager {
       }
     }
 
-    return { path: info.workspacePath, createdNow, key: info.workspaceKey };
+    return { path: workspaceReal, createdNow, key: info.workspaceKey };
   }
 
   async runBeforeRun(issueIdentifier: string, host?: string): Promise<void> {
@@ -116,14 +134,30 @@ export class WorkspaceManager {
 
     const info = this.getWorkspaceInfo(issueIdentifier, host);
     try {
-      const st = await fs.stat(info.workspacePath);
+      const st = await fs.lstat(info.workspacePath);
+      if (st.isSymbolicLink()) {
+        this.logger.warn?.(`Refusing after_run for symlink workspace: ${info.workspacePath}`);
+        return;
+      }
       if (!st.isDirectory()) return;
     } catch {
       return;
     }
 
+    let workspaceReal: string;
+    try {
+      const rootReal = await fs.realpath(info.rootPath);
+      workspaceReal = await fs.realpath(info.workspacePath);
+      if (!isPathInsideRoot(rootReal, workspaceReal)) {
+        this.logger.warn?.(`Refusing after_run for out-of-root workspace: ${info.workspacePath}`);
+        return;
+      }
+    } catch {
+      return;
+    }
+
     const res = await runHookScript(this.hooks.afterRun, {
-      cwd: info.workspacePath,
+      cwd: workspaceReal,
       timeoutMs: this.hooks.timeoutMs,
     });
     if (!res.ok) {
@@ -137,19 +171,34 @@ export class WorkspaceManager {
   async removeWorkspace(issueIdentifier: string, host?: string): Promise<void> {
     const info = this.getWorkspaceInfo(issueIdentifier, host);
 
-    let exists = false;
     try {
-      const st = await fs.stat(info.workspacePath);
-      exists = st.isDirectory();
-    } catch {
-      exists = false;
+      const st = await fs.lstat(info.workspacePath);
+      if (st.isSymbolicLink()) {
+        throw new WorkspaceError(
+          "workspace_path_is_symlink",
+          `Workspace path is a symlink and is not allowed: ${info.workspacePath}`,
+        );
+      }
+      if (!st.isDirectory()) return;
+    } catch (err) {
+      const code = (err as { code?: string } | null)?.code;
+      if (code === "ENOENT") return;
+      if (err instanceof WorkspaceError) throw err;
+      throw err;
     }
 
-    if (!exists) return;
+    const rootReal = await fs.realpath(info.rootPath);
+    const workspaceReal = await fs.realpath(info.workspacePath);
+    if (!isPathInsideRoot(rootReal, workspaceReal)) {
+      throw new WorkspaceError(
+        "workspace_path_outside_root",
+        `Workspace realpath escapes root: root=${rootReal} path=${workspaceReal}`,
+      );
+    }
 
     if (this.hooks.beforeRemove !== undefined) {
       const res = await runHookScript(this.hooks.beforeRemove, {
-        cwd: info.workspacePath,
+        cwd: workspaceReal,
         timeoutMs: this.hooks.timeoutMs,
       });
       if (!res.ok) {
@@ -160,7 +209,7 @@ export class WorkspaceManager {
       }
     }
 
-    await fs.rm(info.workspacePath, { recursive: true, force: true });
+    await fs.rm(workspaceReal, { recursive: true, force: true });
     this.logger.info?.(`Removed workspace for ${issueIdentifier}`);
   }
 }
