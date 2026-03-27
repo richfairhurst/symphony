@@ -1,6 +1,7 @@
 import { existsSync, promises as fs } from "node:fs";
 import path from "node:path";
 import { watchWorkflow } from "../config/watch";
+import { WorkflowError } from "../config/errors";
 import { Orchestrator } from "../core/orchestrator";
 import { LinearClient } from "../linear/client";
 import { OpencodeCliRunner } from "../runner/opencodeCli";
@@ -12,6 +13,7 @@ import { createJsonlFileSink, createLogger, makeLegacyLogger, type LogSink, type
 import { HybridRunner, HybridWorkspaceManager, SshOpencodeRunner, SshWorkspaceManager } from "../worker/ssh";
 import { createMemoryLogSink, createTeeSink, VisualCli } from "./visual";
 import { createDemoLinearClient, createDemoRunner, isDemoTracker } from "./demo";
+import { redactBundleString, redactBundleValue } from "../debug/redaction";
 
 export type CliIo = {
   stdout?: (chunk: string) => void;
@@ -202,6 +204,28 @@ export async function runCli(argv: string[], io: CliIo = {}): Promise<number> {
 
   const legacyLogger = makeLegacyLogger(logger);
   const stateStore = new FilesystemStateStore({ root: stateRoot });
+
+  const unsubscribeWorkflowEvents = watcher.onEvent((ev) => {
+    const ts = Date.now();
+    const write = async () => {
+      if (ev.type === "error") {
+        const err = ev.error as WorkflowError;
+        const code = typeof (err as any)?.code === "string" ? ((err as any).code as string) : undefined;
+        const message = redactBundleString(String(err?.message ?? err));
+        await stateStore.writeRootJsonAtomic("workflow_last_error", {
+          ts,
+          error: { ...(code !== undefined ? { code } : {}), message },
+        });
+        return;
+      }
+
+      await stateStore.writeRootJsonAtomic("workflow_snapshot", {
+        ts,
+        snapshot: redactBundleValue(ev.snapshot),
+      });
+    };
+    void write().catch(() => undefined);
+  });
   const hooks: WorkspaceHooks = {
     timeoutMs: cfg.hooks.timeoutMs,
     ...(cfg.hooks.afterCreate !== undefined ? { afterCreate: cfg.hooks.afterCreate } : {}),
@@ -260,6 +284,7 @@ export async function runCli(argv: string[], io: CliIo = {}): Promise<number> {
     }
   } catch (err) {
     logger.error("cli_start_failed", { error: err });
+    unsubscribeWorkflowEvents();
     watcher.close();
     return 1;
   }
@@ -293,10 +318,12 @@ export async function runCli(argv: string[], io: CliIo = {}): Promise<number> {
   } catch (err) {
     if (visual) visual.stop();
     logger.error("cli_shutdown_failed", { error: err });
+    unsubscribeWorkflowEvents();
     watcher.close();
     return 1;
   }
 
+  unsubscribeWorkflowEvents();
   watcher.close();
   logger.info("cli_stopped", { api_port: api?.port ?? null });
   return 0;

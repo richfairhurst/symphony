@@ -275,6 +275,9 @@ export class Orchestrator {
         attempt: r.attempt,
         startedAtMs: r.startedAtMs,
         lastEventAtMs: r.lastEventAtMs,
+        ...(r.lastEventSummary !== undefined ? { lastEventSummary: r.lastEventSummary } : {}),
+        ...(r.lastEventType !== undefined ? { lastEventType: r.lastEventType } : {}),
+        ...(r.logsTail.length > 0 ? { logsTail: r.logsTail } : {}),
       })),
       retrying: Array.from(this.state.retryQueue.values()),
       claimedCount: this.state.claimed.size,
@@ -316,109 +319,113 @@ export class Orchestrator {
     const nowMs = this.clock.nowMs();
     this.state.lastTickAtMs = nowMs;
 
-    // Clear any refresh request that prompted this tick (best effort coalescing).
-    if (this.refreshPending) {
-      this.refreshPending = false;
-    }
-
-    const snap = this.workflowWatcher.getSnapshot();
-    const cfg = snap.resolved.config;
-
-    this.state.projectSlug = cfg.tracker.projectSlug ?? null;
-    this.state.maxConcurrentAgents = cfg.agent.maxConcurrentAgents ?? null;
-    this.state.pollIntervalMs = cfg.polling.intervalMs ?? null;
-
-    await reconcileRunning({
-      nowMs,
-      cfg: {
-        activeStates: cfg.tracker.activeStates,
-        terminalStates: cfg.tracker.terminalStates,
-        stallTimeoutMs: cfg.opencode.stallTimeoutMs,
-      },
-      linearClient: this.linearClient,
-      running: Array.from(this.state.running.values()).map((r) => ({
-        issue: r.issue,
-        startedAtMs: r.startedAtMs,
-        lastEventAtMs: r.lastEventAtMs,
-        abort: (reason) => {
-          if (reason === "stalled") r.handle.abort("stalled");
-          else r.handle.abort("cancelled");
-        },
-        onTerminal: async () => {
-          r.stopPolicy = "release";
-          r.stopReason = "terminal";
-          this.state.running.delete(r.issue.id);
-          try {
-            await this.workspaceManager.removeWorkspace(r.issue.identifier, r.host);
-          } catch {
-            // ignore
-          }
-        },
-        onNonActive: async () => {
-          r.stopPolicy = "release";
-          r.stopReason = "non_active";
-          this.state.running.delete(r.issue.id);
-        },
-        setIssueState: (state) => {
-          r.issue = { ...r.issue, state };
-        },
-      })),
-      logger: this.logger,
-    });
-
-    if (this.workflowWatcher.getLastError() !== null) {
-      this.logger.warn?.("Workflow config invalid; skipping dispatch");
-      return;
-    }
-
-    // Dispatch validation (per tick): missing fields should block new dispatches.
     try {
-      validateStartupConfig(cfg);
-    } catch (err) {
-      this.logger.warn?.(`Dispatch validation failed; skipping dispatch: ${String(err)}`);
-      return;
-    }
+      // Clear any refresh request that prompted this tick (best effort coalescing).
+      if (this.refreshPending) {
+        this.refreshPending = false;
+      }
 
-    let candidates: LinearIssue[];
-    try {
-      candidates = await fetchCandidateIssues({
+      const snap = this.workflowWatcher.getSnapshot();
+      const cfg = snap.resolved.config;
+
+      this.state.projectSlug = cfg.tracker.projectSlug ?? null;
+      this.state.maxConcurrentAgents = cfg.agent.maxConcurrentAgents ?? null;
+      this.state.pollIntervalMs = cfg.polling.intervalMs ?? null;
+
+      await reconcileRunning({
+        nowMs,
+        cfg: {
+          activeStates: cfg.tracker.activeStates,
+          terminalStates: cfg.tracker.terminalStates,
+          stallTimeoutMs: cfg.opencode.stallTimeoutMs,
+        },
         linearClient: this.linearClient,
-        projectSlug: cfg.tracker.projectSlug!,
-        activeStates: cfg.tracker.activeStates,
+        running: Array.from(this.state.running.values()).map((r) => ({
+          issue: r.issue,
+          startedAtMs: r.startedAtMs,
+          lastEventAtMs: r.lastEventAtMs,
+          abort: (reason) => {
+            if (reason === "stalled") r.handle.abort("stalled");
+            else r.handle.abort("cancelled");
+          },
+          onTerminal: async () => {
+            r.stopPolicy = "release";
+            r.stopReason = "terminal";
+            this.state.running.delete(r.issue.id);
+            try {
+              await this.workspaceManager.removeWorkspace(r.issue.identifier, r.host);
+            } catch {
+              // ignore
+            }
+          },
+          onNonActive: async () => {
+            r.stopPolicy = "release";
+            r.stopReason = "non_active";
+            this.state.running.delete(r.issue.id);
+          },
+          setIssueState: (state) => {
+            r.issue = { ...r.issue, state };
+          },
+        })),
+        logger: this.logger,
       });
-    } catch (err) {
-      this.logger.warn?.(`Candidate fetch failed; skipping dispatch: ${String(err)}`);
-      return;
-    }
 
-    const sorted = sortIssuesForDispatch(candidates);
-
-    const dueRetries = Array.from(this.state.retryQueue.values())
-      .filter((r) => r.dueAtMs <= nowMs)
-      .sort((a, b) => a.dueAtMs - b.dueAtMs);
-
-    for (const r of dueRetries) {
-      const issue = sorted.find((i) => i.id === r.issueId);
-      if (!issue) {
-        this.state.retryQueue.delete(r.issueId);
-        this.state.claimed.delete(r.issueId);
-        await this.persist.clearRetry(r.issueId, r.identifier);
-        continue;
+      if (this.workflowWatcher.getLastError() !== null) {
+        this.logger.warn?.("Workflow config invalid; skipping dispatch");
+        return;
       }
-      await this.tryDispatch(issue, r.attempt);
-    }
 
-    for (const issue of sorted) {
-      if (this.stopped) break;
-      if (this.state.running.has(issue.id)) continue;
-      if (this.state.claimed.has(issue.id)) continue;
-      if (!isDispatchEligible(issue, {
-        activeStates: cfg.tracker.activeStates,
-        terminalStates: cfg.tracker.terminalStates,
-      })) {
-        continue;
+      // Dispatch validation (per tick): missing fields should block new dispatches.
+      try {
+        validateStartupConfig(cfg);
+      } catch (err) {
+        this.logger.warn?.(`Dispatch validation failed; skipping dispatch: ${String(err)}`);
+        return;
       }
-      await this.tryDispatch(issue, null);
+
+      let candidates: LinearIssue[];
+      try {
+        candidates = await fetchCandidateIssues({
+          linearClient: this.linearClient,
+          projectSlug: cfg.tracker.projectSlug!,
+          activeStates: cfg.tracker.activeStates,
+        });
+      } catch (err) {
+        this.logger.warn?.(`Candidate fetch failed; skipping dispatch: ${String(err)}`);
+        return;
+      }
+
+      const sorted = sortIssuesForDispatch(candidates);
+
+      const dueRetries = Array.from(this.state.retryQueue.values())
+        .filter((r) => r.dueAtMs <= nowMs)
+        .sort((a, b) => a.dueAtMs - b.dueAtMs);
+
+      for (const r of dueRetries) {
+        const issue = sorted.find((i) => i.id === r.issueId);
+        if (!issue) {
+          this.state.retryQueue.delete(r.issueId);
+          this.state.claimed.delete(r.issueId);
+          await this.persist.clearRetry(r.issueId, r.identifier);
+          continue;
+        }
+        await this.tryDispatch(issue, r.attempt);
+      }
+
+      for (const issue of sorted) {
+        if (this.stopped) break;
+        if (this.state.running.has(issue.id)) continue;
+        if (this.state.claimed.has(issue.id)) continue;
+        if (!isDispatchEligible(issue, {
+          activeStates: cfg.tracker.activeStates,
+          terminalStates: cfg.tracker.terminalStates,
+        })) {
+          continue;
+        }
+        await this.tryDispatch(issue, null);
+      }
+    } finally {
+      await this.persistSnapshot().catch(() => undefined);
     }
   }
 
