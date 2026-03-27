@@ -1,5 +1,8 @@
 export {};
 
+import { LinearClient } from "../linear/client";
+import { LinearError } from "../linear/errors";
+
 type GraphqlVariables = Record<string, unknown>;
 
 type GraphqlToolInput = {
@@ -86,40 +89,24 @@ async function main(): Promise<number> {
     return 2;
   }
 
-  let res: Response;
   try {
-    res = await fetch(endpoint, {
-      method: "POST",
-      headers: {
-        Authorization: apiKey,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        query: input.query,
-        variables: input.variables ?? {},
-        ...(input.operationName !== undefined ? { operationName: input.operationName } : {}),
-      }),
+    const client = new LinearClient({ endpoint, apiKey });
+    const data = await client.graphqlRequest<unknown, GraphqlVariables>(input.query, input.variables ?? {}, {
+      ...(input.operationName !== undefined ? { operationName: input.operationName } : {}),
     });
+    process.stdout.write(`${JSON.stringify({ data })}\n`);
+    return 0;
   } catch (err) {
+    if (err instanceof LinearError) {
+      if (err.code === "linear_graphql_errors" && Array.isArray(err.details)) {
+        process.stdout.write(`${JSON.stringify({ errors: err.details })}\n`);
+      }
+      console.error(err.message);
+      return 1;
+    }
     console.error(err);
     return 1;
   }
-
-  let payload: unknown;
-  try {
-    payload = await res.json();
-  } catch (err) {
-    console.error(`Linear returned non-JSON payload (HTTP ${res.status})`);
-    console.error(err);
-    return 1;
-  }
-
-  process.stdout.write(`${JSON.stringify(payload)}\n`);
-
-  if (res.status !== 200) return 1;
-  if (isRecord(payload) && Array.isArray(payload.errors) && payload.errors.length > 0) return 1;
-
-  return 0;
 }
 
 main()
