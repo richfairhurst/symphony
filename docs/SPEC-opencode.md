@@ -314,6 +314,11 @@ Delta: document opencode-specific execution posture:
 - What file/network/tool permissions are allowed
 - How secrets are provided (env vars) and what is written to disk
 
+Delta: prompt templating hardening:
+
+- Prompt templates are rendered with LiquidJS, but filesystem-backed template loading is disabled.
+  - `{% include %}`, `{% render %}`, and `{% layout %}` are rejected to prevent local file exfiltration.
+
 ## 16. Reference Algorithms (Language-Agnostic)
 
 No delta. Adopt upstream and implement in TypeScript.

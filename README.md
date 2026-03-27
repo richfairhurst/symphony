@@ -131,6 +131,7 @@ Local API (enabled when `server.port` is set or `--port` is provided):
 ## Configuration notes / trust model
 
 - `WORKFLOW.md` is operator-controlled policy.
+- Liquid prompt templates are hardened: filesystem-backed template loading is disabled and `{% include %}` / `{% render %}` / `{% layout %}` are rejected.
 - Workspace hooks run via `bash -lc` by design (locally, and remotely when using SSH workers).
 - HTTP server binds to loopback (`127.0.0.1`) by default and has no auth; treat it as local-only.
 - If `worker.ssh_hosts` is configured, the orchestrator will not fall back to local execution when the

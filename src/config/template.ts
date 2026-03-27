@@ -6,6 +6,26 @@ const engine = new Liquid({
   strictFilters: true,
 });
 
+function disableFileBackedTags(): void {
+  const disabled = ["include", "render", "layout"] as const;
+
+  for (const tagName of disabled) {
+    const msg = `Liquid tag \"${tagName}\" is disabled (filesystem-backed templates are not allowed)`;
+    engine.registerTag(tagName, {
+      parse() {
+        const err = new Error(msg);
+        (err as { name?: string }).name = "ParseError";
+        throw err;
+      },
+      render() {
+        throw new Error(msg);
+      },
+    });
+  }
+}
+
+disableFileBackedTags();
+
 export type PromptTemplateInput = {
   issue: Record<string, unknown>;
   attempt: number | null;
