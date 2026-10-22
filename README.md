@@ -112,10 +112,12 @@ local workflow references them as `tracker.api_key: $LINEAR_API_KEY` and
 bun run orchestrator
 ```
 
-For a credential-free local smoke test, use the included demo workflow:
+For a credential-free local smoke test, run the example workflow against the
+in-process demo tracker:
 
 ```bash
-cp WORKFLOW.demo.example.md WORKFLOW.md
+cp WORKFLOW.example.md WORKFLOW.md
+# then in WORKFLOW.md, change `kind: linear` to `kind: demo`
 bun run orchestrator --json
 ```
 
