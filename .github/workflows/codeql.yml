@@ -1,0 +1,39 @@
+name: codeql
+
+# Dormant while the repository is private: CodeQL on private repositories
+# requires GitHub Advanced Security. The `if:` below no-ops the job until the
+# repository is public; after flipping visibility it runs on push, PR, and
+# weekly with no further changes.
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  analyze:
+    name: analyze (javascript-typescript)
+    runs-on: ubuntu-latest
+    if: github.event.repository.private == false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: javascript-typescript
+          queries: security-extended
+      # CodeQL for JS/TS scans sources; no build step is required, but running
+      # one keeps alert precision high for this Bun/TS codebase.
+      - run: bun install --frozen-lockfile
+      - uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:javascript-typescript"

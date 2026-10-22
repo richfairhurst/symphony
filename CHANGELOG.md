@@ -2,6 +2,16 @@
 
 All notable changes to Symphony are documented here.
 
+## [Unreleased]
+
+### Changed
+
+- README: credential-free smoke test now points at `WORKFLOW.example.md` with the in-process demo tracker (`tracker.kind: demo`).
+- CI: add a pinned, checksum-verified gitleaks job (git history + working tree scan).
+- CI: add a dormant CodeQL workflow (javascript-typescript, `security-extended`) that activates once the repository is public.
+- Dependabot: also update `github-actions` ecosystem.
+- `.gitignore`: stop ignoring the tracked `.gitleaksignore`.
+
 ## [1.0.0] - 2026-10-22
 
 ### Added

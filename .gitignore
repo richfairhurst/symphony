@@ -25,9 +25,6 @@ workspaces/
 .env
 .env.*
 
-
-.gitleaksignore
-
 # Project-specific
 WORKFLOW.md
 AGENTS.md
