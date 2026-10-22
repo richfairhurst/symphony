@@ -1,0 +1,35 @@
+# macOS
+.DS_Store
+
+# Node/Bun
+node_modules/
+bun.lockb
+
+# TypeScript build output (if you add any)
+dist/
+build/
+out/
+
+# Test/coverage
+coverage/
+
+# Logs
+*.log
+
+# Local state
+.symphony_state/
+.opencode
+.playwright-mcp/
+workspaces/
+# Secrets
+.env
+.env.*
+
+# Project-specific
+thoughts/
+WORKPAD.md
+PLAN.md
+WORKFLOW.md
+AGENTS.md
+docs/plans/China-Architecture.md
+docs/specs/China-Branch.md

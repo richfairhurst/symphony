@@ -1,0 +1,2 @@
+[test]
+pathIgnorePatterns = ["workspaces*/**", ".symphony_state/**", "docs/**", "node_modules/**"]

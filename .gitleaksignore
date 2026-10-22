@@ -1,0 +1,4 @@
+# Synthetic credentials used only to verify debug-bundle redaction.
+# These are test fixtures, not usable credentials.
+src/debug/bundle.test.ts:generic-api-key:18
+aeb49cfcd5f9e89b7f63617030246d5ee17b6b6c:src/debug/bundle.test.ts:generic-api-key:18
