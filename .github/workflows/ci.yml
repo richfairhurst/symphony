@@ -92,12 +92,12 @@ jobs:
           fetch-depth: 0
       - name: install gitleaks
         run: |
-          curl -fsSL -o gitleaks.tar.gz \
+          curl -fsSL -o "gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
             "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
           curl -fsSL -O \
             "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_checksums.txt"
-          sha256sum --ignore-missing --check gitleaks_${GITLEAKS_VERSION}_checksums.txt
-          tar -xzf gitleaks.tar.gz gitleaks
+          sha256sum --ignore-missing --check "gitleaks_${GITLEAKS_VERSION}_checksums.txt"
+          tar -xzf "gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" gitleaks
       - name: scan git history
         run: ./gitleaks git --redact --verbose
       - name: scan working tree
