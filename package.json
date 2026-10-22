@@ -1,0 +1,47 @@
+{
+  "name": "symphony-opencode-orchestrator",
+  "version": "1.0.0",
+  "private": false,
+  "type": "module",
+  "description": "A Bun and TypeScript orchestrator for running OpenCode agents against Linear issues.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/richfairhurst/symphony.git"
+  },
+  "homepage": "https://github.com/richfairhurst/symphony",
+  "bugs": {
+    "url": "https://github.com/richfairhurst/symphony/issues"
+  },
+  "license": "MIT",
+  "engines": {
+    "bun": ">=1.3.11"
+  },
+  "packageManager": "bun@1.3.11",
+  "scripts": {
+    "orchestrator": "bun src/index.ts",
+    "arch:lint": "bun src/tools/archLint.ts",
+    "debug:bundle": "bun src/tools/debugBundle.ts",
+    "doc:lint": "bun scripts/doc-lint.ts",
+    "format": "prettier --write package.json '.github/**/*.yml'",
+    "format:check": "prettier --check package.json '.github/**/*.yml'",
+    "deps:audit": "bun audit --production",
+    "secrets:scan": "gitleaks git --redact --verbose && gitleaks dir . --redact --verbose",
+    "taste:lint": "bun src/tools/tasteLint.ts",
+    "linear-graphql": "bun src/tools/linearGraphql.ts",
+    "linear-ticket": "bun src/tools/linearTicket.ts",
+    "linear-workpad-sync": "bun src/tools/linearWorkpadSync.ts",
+    "test": "bun test",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "liquidjs": "^10.30.0",
+    "yaml": "^2.8.0",
+    "zod": "^4.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.14.0",
+    "bun-types": "^1.3.11",
+    "prettier": "^3.9.10",
+    "typescript": "^5.8.2"
+  }
+}
