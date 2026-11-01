@@ -27,13 +27,13 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version-file: .bun-version
-      - uses: github/codeql-action/init@v3
+      - uses: github/codeql-action/init@v4
         with:
           languages: javascript-typescript
           queries: security-extended
       # CodeQL for JS/TS scans sources; no build step is required, but running
       # one keeps alert precision high for this Bun/TS codebase.
       - run: bun install --frozen-lockfile
-      - uses: github/codeql-action/analyze@v3
+      - uses: github/codeql-action/analyze@v4
         with:
           category: "/language:javascript-typescript"
